@@ -1,4 +1,4 @@
-from elasticsearch import Elasticsearch, NotFoundError
+from elasticsearch import AsyncElasticsearch, NotFoundError
 from typing import List, Dict, Any, Optional
 import logging
 
@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 
 class ElasticsearchClient:
     def __init__(self, host: str = "http://localhost:9200"):
-        self.client = Elasticsearch(hosts=[host])
+        self.client = AsyncElasticsearch(hosts=[host])
         self.host = host
         logger.info(f"Elasticsearch client initialized for host: {host}")
 

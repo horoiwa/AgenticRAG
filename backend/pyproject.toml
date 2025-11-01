@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "aiohttp>=3.13.2",
     "elasticsearch>=9.2.0",
     "fastapi>=0.120.4",
     "google-adk>=1.17.0",
