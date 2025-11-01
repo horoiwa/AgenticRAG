@@ -109,7 +109,7 @@ docker run -d
 コンテナが起動したら、`http://localhost:9200` でElasticsearchにアクセスできることを確認してください。
 
 
-## Backend APIの起動方法
+### Backend APIの起動方法
 
 開発サーバーを起動するには、プロジェクトのルートディレクトリで以下のコマンドを実行します。
 
@@ -119,3 +119,9 @@ uv run uvicorn src.app:app --reload
 
 サーバーは `http://127.0.0.1:8000` で利用可能になります。
 変更が保存されると自動的にリロードされます。
+
+### テスト実行
+
+```
+uv run pytest
+```

@@ -6,7 +6,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class ElasticsearchClient:
-    def __init__(self, host: str = "http://localhost:9200"):
+    def __init__(self, host: str):
         self.client = AsyncElasticsearch(
             hosts=[host],
             verify_certs=False,   # SSL証明書を検証しない
