@@ -1,9 +1,16 @@
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 from enum import Enum
+import logging
+
+from .elasticsearch_client import ElasticsearchClient
+
+# ロガーの設定
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # --- データモデルの定義 ---
 
@@ -38,6 +45,34 @@ app = FastAPI(
     description="An API for Retrieval-Augmented Generation with agentic capabilities.",
     version="0.1.0",
 )
+
+# --- Elasticsearchクライアントの初期化 ---
+es_client = ElasticsearchClient()
+RAG_INDEX_NAME = "rag_documents"
+
+# --- アプリケーションライフサイクルイベント ---
+@app.on_event("startup")
+async def startup_event():
+    logger.info("Starting up application...")
+    if not await es_client.ping():
+        logger.error("Failed to connect to Elasticsearch. Exiting.")
+        raise HTTPException(status_code=500, detail="Failed to connect to Elasticsearch")
+
+    # RAG用インデックスの作成（存在しない場合）
+    mappings = {
+        "properties": {
+            "document_id": {"type": "keyword"},
+            "document_name": {"type": "keyword"},
+            "content": {"type": "text"},
+            "uploaded_at": {"type": "date"},
+            "status": {"type": "keyword"},
+        }
+    }
+    if not await es_client.create_index(RAG_INDEX_NAME, mappings):
+        logger.error(f"Failed to create or ensure index '{RAG_INDEX_NAME}'. Exiting.")
+        raise HTTPException(status_code=500, detail=f"Failed to create or ensure index '{RAG_INDEX_NAME}'")
+    logger.info(f"Elasticsearch index '{RAG_INDEX_NAME}' is ready.")
+
 
 # --- エンドポイントの定義 ---
 
