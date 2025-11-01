@@ -31,16 +31,6 @@ RAGの知識源となるドキュメントを管理します。
 - **エンドポイント:** `DELETE /documents/{document_id}`
     - **機能:** 指定されたドキュメントを削除します。
 
-## APIの起動方法
-
-開発サーバーを起動するには、プロジェクトのルートディレクトリで以下のコマンドを実行します。
-
-```bash
-uv run uvicorn src.app:app --reload
-```
-
-サーバーは `http://127.0.0.1:8000` で利用可能になります。
-変更が保存されると自動的にリロードされます。
 
 ## 検索エンジンの仕様 (Retriever)
 
@@ -110,3 +100,15 @@ docker run -d --name elasticsearch -p 9200:9200 -p 9300:9300 -e "discovery.type=
 *   `docker.elastic.co/elasticsearch/elasticsearch:8.14.3`: 使用するElasticsearchイメージとバージョン
 
 コンテナが起動したら、`http://localhost:9200` でElasticsearchにアクセスできることを確認してください。
+
+
+## Backend APIの起動方法
+
+開発サーバーを起動するには、プロジェクトのルートディレクトリで以下のコマンドを実行します。
+
+```bash
+uv run uvicorn src.app:app --reload
+```
+
+サーバーは `http://127.0.0.1:8000` で利用可能になります。
+変更が保存されると自動的にリロードされます。
