@@ -49,7 +49,6 @@ app = FastAPI(
 
 # --- Elasticsearchクライアントの初期化 ---
 es_client = ElasticsearchClient(host=settings.ELASTIC_SEARCH_HOST)
-RAG_INDEX_NAME = "rag_documents"
 
 # --- アプリケーションライフサイクルイベント ---
 @app.on_event("startup")
@@ -69,10 +68,10 @@ async def startup_event():
             "status": {"type": "keyword"},
         }
     }
-    if not await es_client.create_index(RAG_INDEX_NAME, mappings):
-        logger.error(f"Failed to create or ensure index '{RAG_INDEX_NAME}'. Exiting.")
-        raise HTTPException(status_code=500, detail=f"Failed to create or ensure index '{RAG_INDEX_NAME}'")
-    logger.info(f"Elasticsearch index '{RAG_INDEX_NAME}' is ready.")
+    if not await es_client.create_index(settings.INDEX_NAME, mappings):
+        logger.error(f"Failed to create or ensure index '{settings.INDEX_NAME}'. Exiting.")
+        raise HTTPException(status_code=500, detail=f"Failed to create or ensure index '{settings.INDEX_NAME}'")
+    logger.info(f"Elasticsearch index '{settings.INDEX_NAME}' is ready.")
 
 
 # --- エンドポイントの定義 ---

@@ -4,6 +4,6 @@ load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", None)
 ELASTIC_SEARCH_HOST = os.getenv("ELASTIC_SEARCH_HOST", None)
-
+INDEX_NAME = "documents"
 
 
