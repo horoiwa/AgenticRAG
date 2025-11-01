@@ -1,7 +1,13 @@
 from elasticsearch import AsyncElasticsearch, NotFoundError
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, AsyncGenerator
 import traceback
 import logging
+from contextlib import asynccontextmanager
+
+from src.settings import ELASTIC_SEARCH_HOST
+
+# ロガーの設定
+logging.basicConfig(level=logging.INFO)
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +20,9 @@ class ElasticsearchClient:
         )
         self.host = host
         logger.info(f"Elasticsearch client initialized for host: {host}")
+
+    async def close(self):
+        await self.client.close()
 
     async def ping(self) -> bool:
         """Elasticsearchサーバーへの接続を確認します。"""
@@ -109,6 +118,17 @@ class ElasticsearchClient:
             return None
 
 
+@asynccontextmanager
+async def get_es_client(host: str = ELASTIC_SEARCH_HOST) -> AsyncGenerator[ElasticsearchClient, None]:
+    client = ElasticsearchClient(host=host)
+    try:
+        yield client
+    except:
+        logger.error(traceback.print_exc())
+    finally:
+        await client.close()
+
+
 async def debug():
     logging.basicConfig(level=logging.DEBUG)
     # aiohttp (内部で使われる通信ライブラリ) のログも有効化
@@ -120,25 +140,17 @@ async def debug():
 
     print(f"--- [INFO] Attempting to connect to {host} ---")
 
-    client = AsyncElasticsearch(
-        hosts=[host],
-        verify_certs=False,
-        ssl_show_warn=False,
-    )
 
     try:
-        res = await client.ping()
-        print(f"--- [RESULT] Ping result: {res} ---")
+        async with get_es_client(host) as client:
+            res = await client.ping()
+            print(f"--- [RESULT] Ping result: {res} ---")
 
     except Exception as err:
         print(f"--- [ERROR] An error occurred: {err} ---")
         import traceback
         traceback.print_exc()
 
-    finally:
-        print("--- [INFO] Closing client ---")
-        await client.close()
-        print("--- [INFO] Client closed ---")
 
 if __name__ == '__main__':
     import asyncio

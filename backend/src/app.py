@@ -7,7 +7,7 @@ from enum import Enum
 import logging
 from contextlib import asynccontextmanager
 
-from src.elasticsearch_client import ElasticsearchClient
+from src.search_client import ElasticsearchClient, get_es_client
 from src import settings
 
 # ロガーの設定
@@ -40,31 +40,29 @@ class DocumentMetadata(BaseModel):
     uploaded_at: datetime
     status: DocumentStatus
 
-# --- Elasticsearchクライアントの初期化 ---
-es_client = ElasticsearchClient(host=settings.ELASTIC_SEARCH_HOST)
-
 # --- アプリケーションライフサイクルイベント ---
 @asynccontextmanager
 async def lifespan_event_handler(app: FastAPI):
     logger.info("Starting up application...")
-    if not await es_client.ping():
-        logger.error("Failed to connect to Elasticsearch. Exiting.")
-        raise HTTPException(status_code=500, detail="Failed to connect to Elasticsearch")
+    async with get_es_client() as es_client:
+        if not await es_client.ping():
+            logger.error("Failed to connect to Elasticsearch. Exiting.")
+            raise HTTPException(status_code=500, detail="Failed to connect to Elasticsearch")
 
-    # RAG用インデックスの作成（存在しない場合）
-    mappings = {
-        "properties": {
-            "document_id": {"type": "keyword"},
-            "document_name": {"type": "keyword"},
-            "content": {"type": "text"},
-            "uploaded_at": {"type": "date"},
-            "status": {"type": "keyword"},
+        # RAG用インデックスの作成（存在しない場合）
+        mappings = {
+            "properties": {
+                "document_id": {"type": "keyword"},
+                "document_name": {"type": "keyword"},
+                "content": {"type": "text"},
+                "uploaded_at": {"type": "date"},
+                "status": {"type": "keyword"},
+            }
         }
-    }
-    if not await es_client.create_index(settings.INDEX_NAME, mappings):
-        logger.error(f"Failed to create or ensure index \'{settings.INDEX_NAME}\'. Exiting.")
-        raise HTTPException(status_code=500, detail=f"Failed to create or ensure index \'{settings.INDEX_NAME}\'")
-    logger.info(f"Elasticsearch index \'{settings.INDEX_NAME}\' is ready.")
+        if not await es_client.create_index(settings.INDEX_NAME, mappings):
+            logger.error(f"Failed to create or ensure index \'{settings.INDEX_NAME}\'. Exiting.")
+            raise HTTPException(status_code=500, detail=f"Failed to create or ensure index \'{settings.INDEX_NAME}\'")
+        logger.info(f"Elasticsearch index \'{settings.INDEX_NAME}\' is ready.")
     yield
     logger.info("Shutting down application...")
 
