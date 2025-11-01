@@ -1,24 +1,25 @@
 from elasticsearch import AsyncElasticsearch, NotFoundError
 from typing import List, Dict, Any, Optional
+import traceback
 import logging
 
 logger = logging.getLogger(__name__)
 
 class ElasticsearchClient:
     def __init__(self, host: str = "http://localhost:9200"):
-        self.client = AsyncElasticsearch(hosts=[host])
+        self.client = AsyncElasticsearch(
+            hosts=[host],
+            verify_certs=False,   # SSL証明書を検証しない
+            ssl_show_warn=False, # SSL/TLSが無効であることの警告を非表示にする
+        )
         self.host = host
         logger.info(f"Elasticsearch client initialized for host: {host}")
 
     async def ping(self) -> bool:
         """Elasticsearchサーバーへの接続を確認します。"""
         try:
-            if await self.client.ping():
-                logger.info("Successfully connected to Elasticsearch.")
-                return True
-            else:
-                logger.error("Could not connect to Elasticsearch.")
-                return False
+            res: bool = await self.client.ping()
+            return res
         except Exception as e:
             logger.error(f"Error connecting to Elasticsearch: {e}")
             return False
@@ -106,3 +107,41 @@ class ElasticsearchClient:
         except Exception as e:
             logger.error(f"Error getting document '{id}' from '{index_name}': {e}")
             return None
+
+
+async def debug():
+    logging.basicConfig(level=logging.DEBUG)
+    # aiohttp (内部で使われる通信ライブラリ) のログも有効化
+    logging.getLogger('aiohttp.client').setLevel(logging.DEBUG)
+    # elasticsearch クライアントの詳細ログ
+    logging.getLogger('elasticsearch').setLevel(logging.DEBUG)
+
+    host = "http://127.0.0.1:9200"
+
+    print(f"--- [INFO] Attempting to connect to {host} ---")
+
+    client = AsyncElasticsearch(
+        hosts=[host],
+        verify_certs=False,
+        ssl_show_warn=False,
+    )
+
+    try:
+        res = await client.ping()
+        print(f"--- [RESULT] Ping result: {res} ---")
+
+    except Exception as err:
+        print(f"--- [ERROR] An error occurred: {err} ---")
+        import traceback
+        traceback.print_exc()
+
+    finally:
+        print("--- [INFO] Closing client ---")
+        await client.close()
+        print("--- [INFO] Client closed ---")
+
+if __name__ == '__main__':
+    import asyncio
+    asyncio.run(debug())
+
+

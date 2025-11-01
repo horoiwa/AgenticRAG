@@ -6,7 +6,8 @@ from datetime import datetime
 from enum import Enum
 import logging
 
-from .elasticsearch_client import ElasticsearchClient
+from src.elasticsearch_client import ElasticsearchClient
+from src import settings
 
 # ロガーの設定
 logging.basicConfig(level=logging.INFO)
@@ -47,7 +48,7 @@ app = FastAPI(
 )
 
 # --- Elasticsearchクライアントの初期化 ---
-es_client = ElasticsearchClient()
+es_client = ElasticsearchClient(host=settings.ELASTIC_SEARCH_HOST)
 RAG_INDEX_NAME = "rag_documents"
 
 # --- アプリケーションライフサイクルイベント ---

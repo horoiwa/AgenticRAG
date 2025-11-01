@@ -216,6 +216,7 @@ dependencies = [
     { name = "elasticsearch" },
     { name = "fastapi" },
     { name = "google-adk" },
+    { name = "python-dotenv" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -225,6 +226,7 @@ requires-dist = [
     { name = "elasticsearch", specifier = ">=9.2.0" },
     { name = "fastapi", specifier = ">=0.120.4" },
     { name = "google-adk", specifier = ">=1.17.0" },
+    { name = "python-dotenv", specifier = ">=1.2.1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30.1" },
 ]
 

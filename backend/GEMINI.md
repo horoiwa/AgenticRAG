@@ -89,7 +89,14 @@ RAGの知識源となるドキュメントを管理します。
 以下のコマンドでElasticsearchコンテナを起動できます。
 
 ```bash
-docker run -d --name elasticsearch -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" -e "xpack.security.enabled=false" docker.elastic.co/elasticsearch/elasticsearch:8.14.3
+docker run -d
+ --name elasticsearch
+ -p 9200:9200 -p 9300:9300
+ -e "discovery.type=single-node"
+ -e "xpack.security.enabled=false"
+ -e "xpack.security.http.ssl.enabled=false"
+ -e "xpack.security.enrollment.enabled=false"
+ docker.elastic.co/elasticsearch/elasticsearch:9.2.0
 ```
 
 *   `-d`: バックグラウンドで実行
