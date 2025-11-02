@@ -30,9 +30,9 @@ logger = logging.getLogger(__name__)
 FIELD_MAPPINGS = {
     "mappings": {
         "properties": {
-            "filename": {"type": "text"},
-            "content": {"type": "text"},
-            "full_text": {"type": "text"},
+            "filename": {"type": "text", "analyzer": "kuromoji"},
+            "content": {"type": "text", "analyzer": "kuromoji"},
+            "full_text": {"type": "text", "analyzer": "kuromoji"},
             "content_vector": {
                 "type": "dense_vector",
                 "dims": EMBEDDING_DIM,
