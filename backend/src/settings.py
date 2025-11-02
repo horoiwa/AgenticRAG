@@ -10,4 +10,4 @@ USE_DEVICE = "cpu"  # cpu or cuda
 EMBEDDING_MODEL = "cl-nagoya/ruri-v3-30m"
 EMBEDDING_DIM = 256
 CHUNK_SIZE = 2048
-CONTEXT_SIZE = 5  # num chunks include as context
+NUM_CONTEXT_CHUNKS = 2

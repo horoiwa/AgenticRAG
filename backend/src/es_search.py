@@ -16,7 +16,7 @@ from src.settings import (
     EMBEDDING_DIM,
     EMBEDDING_MODEL,
     CHUNK_SIZE,
-    CONTEXT_SIZE,
+    NUM_CONTEXT_CHUNKS,
 )
 from src import utils
 
@@ -114,26 +114,35 @@ class ElasticsearchClient:
                 markdown_text[i : i + CHUNK_SIZE]
                 for i in range(0, len(markdown_text), CHUNK_SIZE)
             ]
-            emneddings: list[list[float]] = embed(chunks)
+            embeddings: list[list[float]] = embed(chunks)
 
             docs = []
             for chunk_id, (chunk, embedding) in enumerate(
-                zip(chunks, emneddings, strict=True)
+                zip(chunks, embeddings, strict=True)
             ):
+                # fulltextは周辺の最大±2チャンクを連結した文字列
+                prev: list[str] = chunks[
+                    max(0, chunk_id - NUM_CONTEXT_CHUNKS) : chunk_id
+                ]
+                post: list[str] = chunks[
+                    chunk_id : min(len(chunks), chunk_id + NUM_CONTEXT_CHUNKS + 1)
+                ]
+                full_text: str = "".join(prev + post)
                 doc = {
                     "filepath": str(file_path),
                     "filename": file_path.name,
                     "chunk_id": chunk_id,
                     "content": chunk,
-                    "full_text": markdown_text,
+                    "full_text": full_text,
                     "content_vector": embedding,
                 }
                 docs.append(doc)
 
-            import pdb; pdb.set_trace()  # fmt: skip
+            # 1. filepath==str(file_path)の既存レコードをすべて削除
+            # 2. docsをindexに登録
 
             logger.info(
-                f"Successfully indexed {len(chunks)} chunks for document: {file_path.name} with document_id: {document_id}"
+                f"Successfully indexed {len(chunks)} chunks for document: {file_path.name}"
             )
             return True
 
