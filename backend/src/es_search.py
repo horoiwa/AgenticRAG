@@ -5,8 +5,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from elasticsearch import AsyncElasticsearch, NotFoundError
+from sentence_transformers import SentenceTransformer
 
-from src.settings import ELASTIC_SEARCH_HOST
+from src.settings import ELASTIC_SEARCH_HOST, USE_DEVICE
 
 # ロガーの設定
 logging.basicConfig(level=logging.INFO)
@@ -131,8 +132,19 @@ async def get_es_client(host: str = ELASTIC_SEARCH_HOST) -> AsyncGenerator[Elast
         await client.close()
 
 
+embedding_model = SentenceTransformer("cl-nagoya/ruri-v3-30m", device=USE_DEVICE)
+
+
+def embed(sentences: str | list[str]) -> list[list[float]]:
+    if isinstance(sentences, str):
+        sentences = [sentences]
+    embeddings = embedding_model.encode(sentences, convert_to_tensor=False)
+    return [e.tolist() for e in embeddings]
+
+
 async def debug():
-    pass
+    res = embed("hello, this is a test")
+    import pdb; pdb.set_trace()  # fmt: skip
 
 
 if __name__ == '__main__':

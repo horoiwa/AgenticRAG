@@ -7,7 +7,7 @@ from enum import Enum
 import logging
 from contextlib import asynccontextmanager
 
-from src.search_client import ElasticsearchClient, get_es_client
+from src.es_search import ElasticsearchClient, get_es_client
 from src import settings
 
 # ロガーの設定
