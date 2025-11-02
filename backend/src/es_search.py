@@ -28,18 +28,16 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 FIELD_MAPPINGS = {
-    "mappings": {
-        "properties": {
-            "filename": {"type": "text", "analyzer": "kuromoji"},
-            "content": {"type": "text", "analyzer": "kuromoji"},
-            "full_text": {"type": "text", "analyzer": "kuromoji"},
-            "content_vector": {
-                "type": "dense_vector",
-                "dims": EMBEDDING_DIM,
-                "index": True,
-                "similarity": "cosine",
-            },
-        }
+    "properties": {
+        "filename": {"type": "text", "analyzer": "kuromoji"},
+        "content": {"type": "text", "analyzer": "kuromoji"},
+        "full_text": {"type": "text", "analyzer": "kuromoji"},
+        "content_vector": {
+            "type": "dense_vector",
+            "dims": EMBEDDING_DIM,
+            "index": True,
+            "similarity": "cosine",
+        },
     }
 }
 
@@ -77,6 +75,9 @@ class ElasticsearchClient:
             try:
                 await self.client.indices.create(index=index_name, mappings=mappings)
                 logger.info(f"Index '{index_name}' created successfully.")
+                await self.client.indices.put_settings(
+                    index=index_name, body={"index": {"number_of_replicas": 0}}
+                )
                 return True
             except Exception as e:
                 logger.error(f"Error creating index '{index_name}': {e}")

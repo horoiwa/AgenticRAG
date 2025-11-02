@@ -166,3 +166,10 @@ uv run uvicorn src.app:app --reload
 ```
 uv run pytest
 ```
+
+
+### Elastic Searchのインデックス確認
+
+```
+curl "http://localhost:9200/_cat/indices?v"
+```
