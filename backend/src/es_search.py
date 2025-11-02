@@ -4,13 +4,10 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 import functools
-from dataclasses import dataclass
+import time
 
 from elasticsearch import AsyncElasticsearch, NotFoundError
 from sentence_transformers import SentenceTransformer
-from markitdown import MarkItDown
-from datetime import datetime
-import uuid
 
 from src.settings import (
     ELASTIC_SEARCH_HOST,
@@ -21,6 +18,7 @@ from src.settings import (
     CHUNK_SIZE,
     CONTEXT_SIZE,
 )
+from src import utils
 
 # ロガーの設定
 logging.basicConfig(level=logging.INFO)
@@ -29,7 +27,9 @@ logger = logging.getLogger(__name__)
 
 FIELD_MAPPINGS = {
     "properties": {
+        "filepath": {"type": "keyword"},
         "filename": {"type": "text", "analyzer": "kuromoji"},
+        "chunk_id": {"type": "integer"},
         "content": {"type": "text", "analyzer": "kuromoji"},
         "full_text": {"type": "text", "analyzer": "kuromoji"},
         "content_vector": {
@@ -101,49 +101,45 @@ class ElasticsearchClient:
 
     async def index_document(
         self, file_path: Path, index_name: str = INDEX_NAME
-    ) -> list[str]:
+    ) -> bool:
         """
         ドキュメントを解析、チャンク化し、Elasticsearchにインデックスします。
         成功した場合はドキュメントIDのリストを返します。
         """
         try:
             logger.info(f"Starting to index document: {file_path}")
-            markdown_converter = MarkItDown()
-            markdown_text = markdown_converter.convert(file_path)
-            if not markdown_text:
-                logger.warning(f"Could not extract text from {file_path}")
-                return []
 
-            chunks = self._chunk_text(markdown_text)
-            doc_ids = []
-            document_id = str(uuid.uuid4())
+            markdown_text = utils.to_markdown(file_path)
+            chunks: list[str] = [
+                markdown_text[i : i + CHUNK_SIZE]
+                for i in range(0, len(markdown_text), CHUNK_SIZE)
+            ]
+            emneddings: list[list[float]] = embed(chunks)
 
-            for i, chunk in enumerate(chunks):
+            tasks = []
+            for chunk_id, (chunk, embedding) in enumerate(
+                zip(chunks, emneddings, strict=True)
+            ):
                 doc = {
-                    "document_id": document_id,
-                    "document_name": file_path.name,
+                    "filepath": str(file_path),
+                    "filename": file_path.name,
+                    "chunk_id": chunk_id,
                     "content": chunk,
-                    "uploaded_at": datetime.now(),
-                    "status": "completed",
+                    "full_text": markdown_text,
+                    "content_vector": embedding,
                 }
                 # Elasticsearchにインデックス
-                res = await self.client.index(index=index_name, document=doc)
-                doc_ids.append(res["_id"])
+                task = await self.client.index(index=index_name, document=doc)
 
             logger.info(
                 f"Successfully indexed {len(chunks)} chunks for document: {file_path.name} with document_id: {document_id}"
             )
-            return doc_ids
+            return True
 
         except Exception as e:
             logger.error(f"Failed to index document {file_path}: {e}")
             logger.error(traceback.format_exc())
-            return []
-
-    def _chunk_text(self, text: str, chunk_size: int = CHUNK_SIZE) -> list[str]:
-        """テキストを指定されたチャンクサイズに分割します。"""
-        # 簡単な実装例：指定文字数で分割
-        return [text[i : i + chunk_size] for i in range(0, len(text), chunk_size)]
+            return False
 
     async def search(
         self, index_name: str, query: str, fields: List[str], size: int = 5
@@ -205,6 +201,7 @@ def get_embedding_model():
     return embedding_model
 
 
+@utils.timer
 def embed(sentences: str | list[str]) -> list[list[float]]:
     if isinstance(sentences, str):
         sentences = [sentences]
@@ -216,8 +213,9 @@ def embed(sentences: str | list[str]) -> list[list[float]]:
 
 
 async def _debug():
-    sentence = ["hello world"]
-    res = embed(sentence)
+    path = "C:\\Users\\horoi\\Desktop\\AgenticRAG\\backend\\tests\\test_data\\1-1-1.pdf"
+    async with get_es_client() as es_client:
+        ret = await es_client.index_document(Path(path))
     import pdb; pdb.set_trace()  # fmt: skip
 
 

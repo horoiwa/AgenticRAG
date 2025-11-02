@@ -60,6 +60,8 @@ RAGの知識源となるドキュメントを管理します。
   - `content`フィールドの内容は、ベクトル化（Embedding）を行い、セマンティック検索を可能にします。
 
 - **Elasticsearch Mappings**:
+  - `file_id`: ドキュメントのファイル名のハッシュ文字列(`text`)
+  - `chunk_id`: 何番目のチャンクか (`str(int)`)
   - `filename`: ドキュメントのファイル名 (`text`)
   - `content`: 分割されたチャンクのテキスト (`text`)
   - `full_text`: 周辺のチャンクを含むコンテキストテキスト (`text`)
