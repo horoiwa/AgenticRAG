@@ -15,6 +15,8 @@ from src.settings import (
     INDEX_NAME,
     EMBEDDING_DIM,
     EMBEDDING_MODEL,
+    CHUNK_SIZE,
+    CONTEXT_SIZE,
 )
 
 # ロガーの設定

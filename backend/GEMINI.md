@@ -46,6 +46,27 @@ RAGの知識源となるドキュメントを管理します。
 - **エンドポイント:** `DELETE /documents/{document_id}`
     - **機能:** 指定されたドキュメントを削除します。
 
+### 4. ドキュメントのインデックス作成の仕様
+
+- **ドキュメントのテキスト化**:
+  - `Markitdown`ライブラリを利用して、アップロードされたドキュメントをMarkdown形式のテキストに変換します。
+  - 対応ファイル形式: PDF (`.pdf`), Word (`.docx`), PowerPoint (`.pptx`)
+- **チャンク分割**:
+  - 抽出したテキストを、最大2048文字（`CHUNK_SIZE`）のチャンクに分割します。これはElasticsearchの`mappings`における`content`フィールドに格納されます。
+- **コンテキストの追加**:
+  - 各チャンクに対して、その周辺の最大5チャンク分のテキストを`full_text`として追加で格納します。これにより、検索結果の文脈理解を助けます。
+- **ベクトル埋め込み**:
+  - `content`フィールドの内容は、ベクトル化（Embedding）を行い、セマンティック検索を可能にします。
+
+- **Elasticsearch Mappings**:
+  - `filename`: ドキュメントのファイル名 (`text`)
+  - `content`: 分割されたチャンクのテキスト (`text`)
+  - `full_text`: 周辺のチャンクを含むコンテキストテキスト (`text`)
+  - `content_vector`: `content`のベクトル表現 (`dense_vector`)
+    - `dims`: `EMBEDDING_DIM` (設定値)
+    - `index`: `True`
+    - `similarity`: `cosine`
+
 
 ## 検索エンジンの仕様 (Retriever)
 
