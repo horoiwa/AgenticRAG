@@ -11,3 +11,4 @@ EMBEDDING_MODEL = "cl-nagoya/ruri-v3-30m"
 EMBEDDING_DIM = 256
 CHUNK_SIZE = 2048
 NUM_CONTEXT_CHUNKS = 2
+SUPPORTED_EXT = [".pdf", ".docx", ".pptx", ".txt"]
