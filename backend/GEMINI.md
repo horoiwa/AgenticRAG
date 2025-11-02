@@ -137,13 +137,13 @@ RAGの知識源となるドキュメントを管理します。
    ビルドしたイメージを使用して、Elasticsearchコンテナを起動します。
 
    ```bash
-   docker run -d \
-     --name elasticsearch \
-     -p 9200:9200 -p 9300:9300 \
-     -e "discovery.type=single-node" \
-     -e "xpack.security.enabled=false" \
-     -e "xpack.security.http.ssl.enabled=false" \
-     -e "xpack.security.enrollment.enabled=false" \
+   docker run -d
+     --name elasticsearch
+     -p 9200:9200 -p 9300:9300
+     -e "discovery.type=single-node"
+     -e "xpack.security.enabled=false"
+     -e "xpack.security.http.ssl.enabled=false"
+     -e "xpack.security.enrollment.enabled=false"
      elasticsearch-kuromoji:latest
    ```
 
