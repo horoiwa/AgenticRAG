@@ -34,6 +34,9 @@ class ChatResponse(BaseModel):
     answer: str
     sources: List[Source]
 
+class SearchResponse(BaseModel):
+    results: List[Source]
+
 class DocumentMetadata(BaseModel):
     document_id: str
     document_name: str
@@ -95,6 +98,32 @@ async def chat(request: ChatRequest):
         answer=dummy_answer,
         sources=[dummy_source]
     )
+
+@app.get("/search", response_model=SearchResponse)
+async def search(query: str):
+    """
+    Performs a simple keyword search based on the user's query and returns the results.
+    """
+    es_client = await get_es_client()
+    if not await es_client.ping():
+        raise HTTPException(status_code=500, detail="Failed to connect to Elasticsearch")
+
+    search_results = await es_client.search(
+        index_name=settings.INDEX_NAME,
+        query=query,
+        fields=["content", "document_name"]
+    )
+
+    sources = []
+    for hit in search_results:
+        source_data = hit["source"]
+        sources.append(Source(
+            document_id=source_data.get("document_id", "unknown"),
+            document_name=source_data.get("document_name", "unknown"),
+            snippet=source_data.get("content", "")
+        ))
+
+    return SearchResponse(results=sources)
 
 @app.get("/documents", response_model=List[DocumentMetadata])
 async def list_documents():
