@@ -4,7 +4,13 @@
 
 FastAPIを利用して構築する、AgenticなRAG (Retrieval-Augmented Generation) APIの仕様。
 
----
+
+## 開発ルール
+
+- 重要な実装前に、このファイルに仕様を追記してください
+- 仕様と実装が一貫しているか確認してください
+- 実装完了後は必ず `uv run pytest` コマンドでテスト実行してください
+
 
 ## APIエンドポイント
 

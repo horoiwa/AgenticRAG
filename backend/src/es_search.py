@@ -148,13 +148,5 @@ def embed(sentences: str | list[str]) -> list[list[float]]:
     return [e.tolist() for e in embeddings]
 
 
-async def tmp_develop_script():
-    filepath: Path = Path("C:\Users\horoi\Desktop\AgenticRAG\backend\tests\test_data\1-1-1.pdf")
-    es_client = await get_es_client()
-
-
-if __name__ == '__main__':
-    import asyncio
-    asyncio.run(tmp_develop_script())
 
 

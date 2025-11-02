@@ -1,47 +1,24 @@
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import List, Optional
+from typing import List
 from datetime import datetime
-from enum import Enum
 import logging
 from contextlib import asynccontextmanager
 
-from src.es_search import ElasticsearchClient, get_es_client
+from src.es_search import get_es_client
 from src import settings
+from src.schemas import (
+    ChatRequest,
+    ChatResponse,
+    SearchResponse,
+    DocumentMetadata,
+    Source,
+    DocumentStatus,
+)
 
 # ロガーの設定
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# --- データモデルの定義 ---
-
-class DocumentStatus(str, Enum):
-    COMPLETED = "completed"
-    PROCESSING = "processing"
-    FAILED = "failed"
-
-class Source(BaseModel):
-    document_id: str
-    document_name: str
-    snippet: str
-
-class ChatRequest(BaseModel):
-    query: str
-    session_id: Optional[str] = None
-
-class ChatResponse(BaseModel):
-    answer: str
-    sources: List[Source]
-
-class SearchResponse(BaseModel):
-    results: List[Source]
-
-class DocumentMetadata(BaseModel):
-    document_id: str
-    document_name: str
-    uploaded_at: datetime
-    status: DocumentStatus
 
 # --- アプリケーションライフサイクルイベント ---
 @asynccontextmanager

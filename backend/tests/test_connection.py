@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from src.app import app
 import asyncio
 import os
-from src.elasticsearch_client import ElasticsearchClient
+from src.es_search import ElasticsearchClient
 
 # Elasticsearchのホスト
 ELASTICSEARCH_HOST = os.getenv("ELASTICSEARCH_HOST", "http://localhost:9200")
