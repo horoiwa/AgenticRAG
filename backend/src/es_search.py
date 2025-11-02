@@ -4,16 +4,22 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 import functools
+from dataclasses import dataclass
 
 from elasticsearch import AsyncElasticsearch, NotFoundError
 from sentence_transformers import SentenceTransformer
 
-from src.settings import ELASTIC_SEARCH_HOST, USE_DEVICE
+from src.settings import ELASTIC_SEARCH_HOST, USE_DEVICE, INDEX_NAME
 
 # ロガーの設定
 logging.basicConfig(level=logging.INFO)
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class Document:
+    pass
 
 class ElasticsearchClient:
     def __init__(self, host: str):
@@ -67,18 +73,13 @@ class ElasticsearchClient:
             logger.error(f"Error deleting index '{index_name}': {e}")
             return False
 
-    async def index_document(self, index_name: str, document: Dict[str, Any], id: Optional[str] = None) -> Optional[str]:
+    async def index_document(self, file_path: Path, index_name: str = INDEX_NAME) -> Optional[str]:
         """
         ドキュメントをインデックスに追加します。
         成功した場合はドキュメントIDを返します。
         """
-        try:
-            response = await self.client.index(index=index_name, document=document, id=id)
-            logger.info(f"Document indexed successfully in '{index_name}' with ID: {response['_id']}")
-            return response['_id']
-        except Exception as e:
-            logger.error(f"Error indexing document in '{index_name}': {e}")
-            return None
+        pass
+
 
     async def search(self, index_name: str, query: str, fields: List[str], size: int = 5) -> List[Dict[str, Any]]:
         """
@@ -147,13 +148,13 @@ def embed(sentences: str | list[str]) -> list[list[float]]:
     return [e.tolist() for e in embeddings]
 
 
-async def debug():
-    res = embed("hello, this is a test")
-    import pdb; pdb.set_trace()  # fmt: skip
+async def tmp_develop_script():
+    filepath: Path = Path("C:\Users\horoi\Desktop\AgenticRAG\backend\tests\test_data\1-1-1.pdf")
+    es_client = await get_es_client()
 
 
 if __name__ == '__main__':
     import asyncio
-    asyncio.run(debug())
+    asyncio.run(tmp_develop_script())
 
 
