@@ -3,6 +3,7 @@ import traceback
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
+import functools
 
 from elasticsearch import AsyncElasticsearch, NotFoundError
 from sentence_transformers import SentenceTransformer
@@ -132,13 +133,17 @@ async def get_es_client(host: str = ELASTIC_SEARCH_HOST) -> AsyncGenerator[Elast
         await client.close()
 
 
-embedding_model = SentenceTransformer("cl-nagoya/ruri-v3-30m", device=USE_DEVICE)
+@functools.cache
+def get_embedding_model():
+    embedding_model = SentenceTransformer("cl-nagoya/ruri-v3-30m", device=USE_DEVICE)
+    return embedding_model
 
 
 def embed(sentences: str | list[str]) -> list[list[float]]:
     if isinstance(sentences, str):
         sentences = [sentences]
-    embeddings = embedding_model.encode(sentences, convert_to_tensor=False)
+    model = get_embedding_model()
+    embeddings = model.encode(sentences, convert_to_tensor=False)
     return [e.tolist() for e in embeddings]
 
 
