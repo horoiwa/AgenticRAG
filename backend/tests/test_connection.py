@@ -3,12 +3,13 @@ from fastapi.testclient import TestClient
 from src.app import app
 import asyncio
 import os
-from src.es_search import ElasticsearchClient
+from src.es_search import get_es_client
 
 # Elasticsearchのホスト
 ELASTICSEARCH_HOST = os.getenv("ELASTICSEARCH_HOST", "http://localhost:9200")
 
 client = TestClient(app)
+
 
 def test_fastapi_connection():
     """
@@ -20,6 +21,7 @@ def test_fastapi_connection():
     assert isinstance(response.json(), list)
     print(f"FastAPI connection successful. Status: {response.status_code}")
 
+
 @pytest.mark.asyncio
 async def test_elasticsearch_connection():
     """
@@ -27,9 +29,11 @@ async def test_elasticsearch_connection():
     ElasticsearchClientのpingメソッドを使用し、接続が成功することを確認します。
     """
     try:
-        es_client = ElasticsearchClient(host=ELASTICSEARCH_HOST)
-        is_connected = await es_client.ping()
+        async with get_es_client() as es_client:
+            is_connected = await es_client.ping()
         assert is_connected is True
         print(f"Elasticsearch connection successful to {ELASTICSEARCH_HOST}")
     except Exception as e:
-        pytest.fail(f"Elasticsearch connection failed: {e}. Ensure Elasticsearch is running and accessible at {ELASTICSEARCH_HOST}")
+        pytest.fail(
+            f"Elasticsearch connection failed: {e}. Ensure Elasticsearch is running and accessible at {ELASTICSEARCH_HOST}"
+        )
