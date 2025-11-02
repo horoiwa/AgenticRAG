@@ -122,26 +122,30 @@ RAGの知識源となるドキュメントを管理します。
 ### Elasticsearchの起動
 
 本プロジェクトでは、知識ベースとしてElasticsearchを使用します。開発環境ではDockerコンテナとしてローカルで起動することを推奨します。
+`kuromoji`プラグインを導入するため、`Dockerfile`を使用してカスタムイメージをビルドします。
 
-以下のコマンドでElasticsearchコンテナを起動できます。
+1. **Dockerイメージのビルド**
 
-```bash
-docker run -d
- --name elasticsearch
- -p 9200:9200 -p 9300:9300
- -e "discovery.type=single-node"
- -e "xpack.security.enabled=false"
- -e "xpack.security.http.ssl.enabled=false"
- -e "xpack.security.enrollment.enabled=false"
- docker.elastic.co/elasticsearch/elasticsearch:9.2.0
-```
+   `backend`ディレクトリに移動し、以下のコマンドを実行してDockerイメージをビルドします。
 
-*   `-d`: バックグラウンドで実行
-*   `--name elasticsearch`: コンテナ名を `elasticsearch` に設定
-*   `-p 9200:9200 -p 9300:9300`: ホストのポートをコンテナにマッピング
-*   `-e "discovery.type=single-node"`: シングルノード構成で起動
-*   `-e "xpack.security.enabled=false"`: セキュリティ機能を無効化（開発用）
-*   `docker.elastic.co/elasticsearch/elasticsearch:8.14.3`: 使用するElasticsearchイメージとバージョン
+   ```bash
+   docker build -t elasticsearch-kuromoji -f docker/Dockerfile .
+   ```
+
+2. **Elasticsearchコンテナの起動**
+
+   ビルドしたイメージを使用して、Elasticsearchコンテナを起動します。
+
+   ```bash
+   docker run -d \
+     --name elasticsearch \
+     -p 9200:9200 -p 9300:9300 \
+     -e "discovery.type=single-node" \
+     -e "xpack.security.enabled=false" \
+     -e "xpack.security.http.ssl.enabled=false" \
+     -e "xpack.security.enrollment.enabled=false" \
+     elasticsearch-kuromoji:latest
+   ```
 
 コンテナが起動したら、`http://localhost:9200` でElasticsearchにアクセスできることを確認してください。
 
