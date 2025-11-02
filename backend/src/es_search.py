@@ -139,7 +139,18 @@ class ElasticsearchClient:
                 docs.append(doc)
 
             # 1. filepath==str(file_path)の既存レコードをすべて削除
+            await self.client.delete_by_query(
+                index=index_name,
+                body={"query": {"term": {"filepath": str(file_path)}}},
+                refresh=True,
+            )
+
             # 2. docsをindexに登録
+            operations = []
+            for doc in docs:
+                operations.append({"index": {"_index": index_name}})
+                operations.append(doc)
+            await self.client.bulk(operations=operations, refresh=True)
 
             logger.info(
                 f"Successfully indexed {len(chunks)} chunks for document: {file_path.name}"
@@ -226,7 +237,6 @@ async def _debug():
     path = "C:\\Users\\horoi\\Desktop\\AgenticRAG\\backend\\tests\\test_data\\1-1-1.pdf"
     async with get_es_client() as es_client:
         ret = await es_client.index_document(Path(path))
-    import pdb; pdb.set_trace()  # fmt: skip
 
 
 if __name__ == "__main__":
