@@ -116,7 +116,7 @@ class ElasticsearchClient:
             ]
             emneddings: list[list[float]] = embed(chunks)
 
-            tasks = []
+            docs = []
             for chunk_id, (chunk, embedding) in enumerate(
                 zip(chunks, emneddings, strict=True)
             ):
@@ -128,8 +128,9 @@ class ElasticsearchClient:
                     "full_text": markdown_text,
                     "content_vector": embedding,
                 }
-                # Elasticsearchにインデックス
-                task = await self.client.index(index=index_name, document=doc)
+                docs.append(doc)
+
+            import pdb; pdb.set_trace()  # fmt: skip
 
             logger.info(
                 f"Successfully indexed {len(chunks)} chunks for document: {file_path.name} with document_id: {document_id}"
