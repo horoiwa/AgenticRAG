@@ -8,6 +8,9 @@ from dataclasses import dataclass
 
 from elasticsearch import AsyncElasticsearch, NotFoundError
 from sentence_transformers import SentenceTransformer
+from markitdown import MarkItDown
+from datetime import datetime
+import uuid
 
 from src.settings import (
     ELASTIC_SEARCH_HOST,
@@ -63,7 +66,9 @@ class ElasticsearchClient:
             logger.error(f"Error connecting to Elasticsearch: {e}")
             return False
 
-    async def create_index(self, index_name: str, mappings: Dict[str, Any]) -> bool:
+    async def create_index(
+        self, index_name: str, mappings: Dict[str, Any] = FIELD_MAPPINGS
+    ) -> bool:
         """
         指定されたインデックス名とマッピングでインデックスを作成します。
         既に存在する場合は何もしません。
@@ -95,12 +100,49 @@ class ElasticsearchClient:
 
     async def index_document(
         self, file_path: Path, index_name: str = INDEX_NAME
-    ) -> Optional[str]:
+    ) -> list[str]:
         """
-        ドキュメントをインデックスに追加します。
-        成功した場合はドキュメントIDを返します。
+        ドキュメントを解析、チャンク化し、Elasticsearchにインデックスします。
+        成功した場合はドキュメントIDのリストを返します。
         """
-        pass
+        try:
+            logger.info(f"Starting to index document: {file_path}")
+            markdown_converter = MarkItDown()
+            markdown_text = markdown_converter.convert(file_path)
+            if not markdown_text:
+                logger.warning(f"Could not extract text from {file_path}")
+                return []
+
+            chunks = self._chunk_text(markdown_text)
+            doc_ids = []
+            document_id = str(uuid.uuid4())
+
+            for i, chunk in enumerate(chunks):
+                doc = {
+                    "document_id": document_id,
+                    "document_name": file_path.name,
+                    "content": chunk,
+                    "uploaded_at": datetime.now(),
+                    "status": "completed",
+                }
+                # Elasticsearchにインデックス
+                res = await self.client.index(index=index_name, document=doc)
+                doc_ids.append(res["_id"])
+
+            logger.info(
+                f"Successfully indexed {len(chunks)} chunks for document: {file_path.name} with document_id: {document_id}"
+            )
+            return doc_ids
+
+        except Exception as e:
+            logger.error(f"Failed to index document {file_path}: {e}")
+            logger.error(traceback.format_exc())
+            return []
+
+    def _chunk_text(self, text: str, chunk_size: int = CHUNK_SIZE) -> list[str]:
+        """テキストを指定されたチャンクサイズに分割します。"""
+        # 簡単な実装例：指定文字数で分割
+        return [text[i : i + chunk_size] for i in range(0, len(text), chunk_size)]
 
     async def search(
         self, index_name: str, query: str, fields: List[str], size: int = 5

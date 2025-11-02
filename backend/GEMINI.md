@@ -9,6 +9,7 @@ FastAPIを利用して構築する、AgenticなRAG (Retrieval-Augmented Generati
 
 - 重要な実装前に、このファイルに仕様を追記してください
 - 仕様と実装が一貫しているか確認してください
+- 実装完了後は必ず `tests/` にunittestを実装してください
 - 実装完了後は必ず `uv run pytest` コマンドでテスト実行してください
 
 
