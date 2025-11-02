@@ -1,8 +1,10 @@
-from elasticsearch import AsyncElasticsearch, NotFoundError
 from typing import List, Dict, Any, Optional, AsyncGenerator
 import traceback
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
+
+from elasticsearch import AsyncElasticsearch, NotFoundError
 
 from src.settings import ELASTIC_SEARCH_HOST
 
@@ -130,26 +132,7 @@ async def get_es_client(host: str = ELASTIC_SEARCH_HOST) -> AsyncGenerator[Elast
 
 
 async def debug():
-    logging.basicConfig(level=logging.DEBUG)
-    # aiohttp (内部で使われる通信ライブラリ) のログも有効化
-    logging.getLogger('aiohttp.client').setLevel(logging.DEBUG)
-    # elasticsearch クライアントの詳細ログ
-    logging.getLogger('elasticsearch').setLevel(logging.DEBUG)
-
-    host = "http://127.0.0.1:9200"
-
-    print(f"--- [INFO] Attempting to connect to {host} ---")
-
-
-    try:
-        async with get_es_client(host) as client:
-            res = await client.ping()
-            print(f"--- [RESULT] Ping result: {res} ---")
-
-    except Exception as err:
-        print(f"--- [ERROR] An error occurred: {err} ---")
-        import traceback
-        traceback.print_exc()
+    pass
 
 
 if __name__ == '__main__':
