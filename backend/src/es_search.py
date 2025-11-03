@@ -220,7 +220,7 @@ class ElasticsearchClient:
                         "field": "content_vector",
                         "query_vector": query_vector,
                         "k": RRF_TOP_K,
-                        "num_candidates": RRF_TOP_K * 2,
+                        "num_candidates": 100,
                     },
                     _source=[
                         "filepath",

@@ -13,4 +13,4 @@ CHUNK_SIZE = 2048
 NUM_CONTEXT_CHUNKS = 2
 SUPPORTED_EXT = [".pdf", ".docx", ".pptx", ".txt"]
 RRF_RANK_CONST = 60
-RRF_TOP_K = 50
+RRF_TOP_K = 20
