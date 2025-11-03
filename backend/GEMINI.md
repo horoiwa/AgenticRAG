@@ -136,7 +136,10 @@ state["res1"] = "検索結果1"
 https://google.github.io/adk-docs/agents/custom-agents/#implementing-custom-logic
 
 参考文献を受け取りたい
-...
+- artifactを使えばいい
+
+プロンプトは以下を参考にできる
+https://github.com/google/adk-samples/blob/5401edac5a51fd3367377d62d19d1f0fa23c407b/python/agents/RAG/rag/prompts.py
 
 ## 開発環境セットアップ
 

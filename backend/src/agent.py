@@ -43,9 +43,7 @@ class SearchAgent(BaseAgent):
             ctx.session.state[f"filename_{i}"] = search_result.filename
             ctx.session.state[f"content_{i}"] = search_result.full_text
 
-        yield Event(
-            author=self.name,
-        )
+        yield Event(author=self.name)
 
 
 search_agent = SearchAgent(name="search_agent")
@@ -68,7 +66,7 @@ answer_agent = LlmAgent(
     [5]{filename_5}
     {content_5}
     """,
-    output_key="current_answer",
+    output_key="answer1-5",
 )
 
 
@@ -117,8 +115,6 @@ async def call_agent_async(query: str, runner, user_id, session_id):
                 final_response_text = (
                     f"Agent escalated: {event.error_message or 'No specific message.'}"
                 )
-            # Add more checks here if needed (e.g., specific error codes)
-            # break  # Stop processing events once the final response is found
 
     print(f"<<< Agent Response: {final_response_text}")
 
@@ -154,6 +150,7 @@ async def debug_1():
     ret = await session_service.get_session(
         app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID
     )
+    import pdb; pdb.set_trace()  # fmt: skip
 
 
 if __name__ == "__main__":
