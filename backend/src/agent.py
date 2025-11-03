@@ -39,10 +39,12 @@ class SearchAgent(BaseAgent):
         async with get_es_client() as es_client:
             search_results: list[Source] = await es_client.hybrid_search(query=query)
 
-        ctx.session.state["search_results"] = search_results
+        for i, search_result in enumerate(search_results, start=1):
+            ctx.session.state[f"filename_{i}"] = search_result.filename
+            ctx.session.state[f"content_{i}"] = search_result.content
+
         yield Event(
             author=self.name,
-            content=f"{len(search_results)}件の検索結果を取得しました。",
         )
 
 
@@ -55,84 +57,18 @@ answer_agent = LlmAgent(
     instruction="""ユーザーの質問と会話履歴を考慮して、参考資料に基づく回答を生成してください。
 
     参考資料:
-    [{doc_id}]{filename}
-    {search_result}
+    [1]{filename_1}
+    {content_1}
+    [2]{filename_2}
+    {content_2}
+    [3]{filename_3}
+    {content_3}
+    [4]{filename_4}
+    {content_4}
+    [5]{filename_5}
+    {content_5}
     """,
     output_key="current_answer",
-)
-
-
-class AnswerLoopAgent(BaseAgent):
-    async def _run_async_impl(
-        self, ctx: InvocationContext
-    ) -> AsyncGenerator[Event, None]:
-        search_results = ctx.session.state.get("search_results", [])
-        answer_proposals = []
-
-        for i, result in enumerate(search_results, start=1):
-            _ctx = copy.deepcopy(ctx)
-            _ctx.session.state["doc_id"] = i
-            _ctx.session.state["filename"] = result.filename
-            _ctx.session.state["search_result"] = result.content
-            async for event in answer_agent.run_async(_ctx):
-                if event.is_final_response():
-                    answer_proposals.append(_ctx.session.state.get("current_answer"))
-
-        import pdb; pdb.set_trace()  # fmt: skip
-        ctx.session.state["answer_proposals"] = answer_proposals
-        yield Event(
-            author=self.name,
-            content=f"{len(answer_proposals)}件の回答案を生成しました。",
-        )
-
-
-answer_loop_agent = AnswerLoopAgent(name="answer_loop_agent")
-
-# ステップ 4: 最終回答の生成
-synthesizer_agent = LlmAgent(
-    name="synthesizer_agent",
-    model="gemini-1.5-pro",
-    instruction="""ユーザーの質問と会話履歴、そして以下の複数の回答案を考慮して、最終的な回答を生成してください。
-    各回答案から情報を取捨選択し、より洗練された「最終回答」を生成します。
-    その際、どの情報源（検索結果）から引用したかを明記します。
-    また、回答案の中に矛盾する情報が含まれる場合は、その点を考慮して最適な回答を構築します。
-
-    回答案:
-    {answer_proposals}
-    """,
-)
-
-# 補足：適切な検索結果が得られなかった場合
-fallback_agent = LlmAgent(
-    name="fallback_agent",
-    model=settings.LLM,
-    instruction="""検索結果が見つからなかったため、LLMが持つ一般的な知識に基づいて回答を生成してください。""",
-)
-
-
-class OrchestratorAgent(BaseAgent):
-    async def _run_async_impl(
-        self, ctx: InvocationContext
-    ) -> AsyncGenerator[Event, None]:
-        search_results = ctx.session.state.get("search_results", [])
-
-        rag_pipeline = self.sub_agents[0]
-        fallback_agent = self.sub_agents[1]
-
-        if search_results:
-            async for event in rag_pipeline.run_async(ctx):
-                yield event
-        else:
-            async for event in fallback_agent.run_async(ctx):
-                yield event
-
-
-rag_pipeline = SequentialAgent(
-    name="rag_pipeline", sub_agents=[answer_loop_agent, synthesizer_agent]
-)
-
-orchestrator_agent = OrchestratorAgent(
-    name="orchestrator_agent", sub_agents=[rag_pipeline, fallback_agent]
 )
 
 
@@ -141,12 +77,9 @@ AdvancedRAGAgent = SequentialAgent(
     sub_agents=[
         query_rewriter_agent,
         search_agent,
-        orchestrator_agent,
+        answer_agent,
     ],
 )
-
-
-root_agent = AdvancedRAGAgent
 
 
 from google.adk.runners import Runner
@@ -197,7 +130,7 @@ async def debug_1():
 
     session_service = InMemorySessionService()
     history = [
-        {"role": "user", "content": "軍事情報が気になります"},
+        {"role": "user", "content": "農業情報が気になります"},
         {
             "role": "assistant",
             "content": "承知しました、どの国について調べましょうか？",

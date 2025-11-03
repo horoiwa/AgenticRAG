@@ -120,6 +120,20 @@ Google Agent Development Kit (`adk`) を利用してAgentワークフローを�
 ### **補足：適切な検索結果が得られなかった場合**
 ステップ2でElasticSearchから適切な検索結果が得られなかった場合、その旨をユーザーに伝えた上で、LLMが持つ一般的な知識に基づいて回答を生成します。
 
+### そのほかの参考資料
+会話履歴:
+stateに突っ込もう
+
+並列化
+- https://google.github.io/adk-docs/agents/workflow-agents/parallel-agents/#full-example-parallel-web-research
+
+outputを番号指定の複数にしてパラレルって感じかな
+state["res1"] = "検索結果1"
+
+"answer1"...
+
+受け渡しは以下で
+https://google.github.io/adk-docs/agents/custom-agents/#implementing-custom-logic
 
 ## 開発環境セットアップ
 
