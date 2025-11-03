@@ -4,12 +4,6 @@ from datetime import datetime
 from enum import Enum
 
 
-class DocumentStatus(str, Enum):
-    COMPLETED = "completed"
-    PROCESSING = "processing"
-    FAILED = "failed"
-
-
 class Source(BaseModel):
     filepath: str
     filename: str
@@ -26,14 +20,3 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     answer: str
     sources: List[Source]
-
-
-class SearchResponse(BaseModel):
-    results: List[Source]
-
-
-class DocumentMetadata(BaseModel):
-    document_id: str
-    document_name: str
-    uploaded_at: datetime
-    status: DocumentStatus

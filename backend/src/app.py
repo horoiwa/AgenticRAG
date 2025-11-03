@@ -1,18 +1,15 @@
 from fastapi import FastAPI, HTTPException
 from typing import List
-from datetime import datetime
-import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
+import logging
 
 from src.es_search import get_es_client
 from src import settings
 from src.schemas import (
     ChatRequest,
     ChatResponse,
-    SearchResponse,
-    DocumentMetadata,
     Source,
-    DocumentStatus,
 )
 
 # ロガーの設定
@@ -66,7 +63,7 @@ async def chat(request: ChatRequest):
     raise NotImplementedError()
 
 
-@app.get("/search", response_model=SearchResponse)
+@app.get("/search", response_model=List[Source])
 async def search(query: str):
     """
     Performs a simple keyword search based on the user's query and returns the results.
@@ -74,9 +71,6 @@ async def search(query: str):
     raise NotImplementedError()
 
 
-@app.get("/documents", response_model=List[DocumentMetadata])
+@app.get("/documents", response_model=List[Path])
 async def list_documents():
-    """
-    Lists metadata of all uploaded documents.
-    """
     raise NotImplementedError()

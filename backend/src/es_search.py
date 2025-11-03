@@ -23,7 +23,7 @@ from src.settings import (
     RRF_TOP_K,
 )
 from src import utils
-from src.schemas import SearchResponse, Source
+from src.schemas import Source
 
 # ロガーの設定
 logging.basicConfig(level=logging.INFO)
@@ -169,7 +169,7 @@ class ElasticsearchClient:
 
     async def search(
         self, index_name: str, query: str, fields: List[str], size: int = 5
-    ) -> SearchResponse:
+    ) -> List[Source]:
         """
         指定されたインデックスとフィールドに対して全文検索を実行します。
         """
@@ -180,20 +180,20 @@ class ElasticsearchClient:
                 size=size,
             )
             hits = response["hits"]["hits"]
-            search_response = format_search_results(hits)
+            search_response: List[Source] = format_search_results(hits)
             logger.info(
-                f"Search for '{query}' in '{index_name}' returned {len(search_response.results)} hits."
+                f"Search for '{query}' in '{index_name}' returned {len(search_response)} hits."
             )
             return search_response
         except Exception as e:
             logger.error(
                 f"Error during search in '{index_name}' for query '{query}': {e}"
             )
-            return SearchResponse(results=[])
+            return []
 
     async def hybrid_search(
         self, query: str, size: int = 5, index_name: str = INDEX_NAME
-    ) -> SearchResponse:
+    ) -> List[Source]:
         """ハイブリッド検索を実行. RRFは有償版限定なので自力実装"""
 
         try:
@@ -255,9 +255,9 @@ class ElasticsearchClient:
             final_hits = [all_hits[doc_id] for doc_id, score in sorted_results[:size]]
 
             # 4. 結果の整形
-            search_response = format_search_results(final_hits)
+            search_response: List[Source] = format_search_results(final_hits)
             logger.info(
-                f"Hybrid search for '{query}' in '{index_name}' returned {len(search_response.results)} hits."
+                f"Hybrid search for '{query}' in '{index_name}' returned {len(search_response)} hits."
             )
             return search_response
         except Exception as e:
@@ -265,7 +265,7 @@ class ElasticsearchClient:
                 f"Error during hybrid search in '{index_name}' for query '{query}': {e}"
             )
             logger.error(traceback.format_exc())
-            return SearchResponse(results=[])
+            return []
 
     async def get_document_list(self, index_name: str = INDEX_NAME) -> list[Path]:
         """ユニークなファイルパスのリストを取得します。"""
@@ -325,7 +325,7 @@ def embed(sentences: str | list[str]) -> list[list[float]]:
     return [e.tolist() for e in embeddings]
 
 
-def format_search_results(hits: list[dict]) -> SearchResponse:
+def format_search_results(hits: list[dict]) -> List[Source]:
     results = []
     for hit in hits:
         source_data = hit["_source"]
@@ -337,7 +337,7 @@ def format_search_results(hits: list[dict]) -> SearchResponse:
             chunk_id=source_data["chunk_id"],
         )
         results.append(source)
-    return SearchResponse(results=results)
+    return results
 
 
 async def _debug_1():
