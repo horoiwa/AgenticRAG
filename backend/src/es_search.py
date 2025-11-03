@@ -210,8 +210,16 @@ class ElasticsearchClient:
                     "field": "content_vector",
                     "query_vector": query_vector,
                     "k": size,
-                    "num_candidates": 100,
+                    "num_candidates": 96,
                 },
+                # RRFは有償版限定機能
+                # "rank": {
+                #     "rrf": {
+                #         # RRFは kNN と query の両方の結果に適用される
+                #         "window_size": 48,  # 上位から何件をRRFの対象にするか
+                #         "rank_constant": 20,  # RRFのアルゴリズムパラメータ
+                #     }
+                # },
                 "size": size,
             }
 
