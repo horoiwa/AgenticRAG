@@ -693,3 +693,89 @@ document_pipeline = SequentialAgent(
 }
 ```
 このEvalsetは、「ロンドンの天気は？」という質問に対し、エージェントが`get_weather(city="London")`というツールコールを行い、「ロンドンの天気は曇りです...」という応答を返すことを期待しています。`adk eval`コマンドは、実際のエージェントの動作がこの期待と一致するかを評価します。
+
+### 9.11. 決定論的なツール呼び出し
+
+**概要:**
+`LlmAgent`によるツール呼び出しは、LLMの判断に依存するため本質的に「非決定的」です。しかし、ワークフローのある段階で「必ず特定のツールを、特定の引数で実行したい」という要件は頻繁に発生します。この「決定的」なツール呼び出しは、カスタムの`BaseAgent`を作成し、その中でツール関数を直接呼び出すことで実現できます。
+
+**実装方法:**
+`@tool`でデコレートされた関数も、実体は単なるPython関数です。LLMを介さずに、`BaseAgent`を継承したカスタムエージェントの実行ロジック（`_run_async_impl`）内で直接呼び出します。
+
+#### ステップ1: ツールを定義する (`src/tools.py`)
+
+まず、通常通りツールを定義します。
+```python
+# src/tools.py
+from adk.tool import tool
+from typing import List, Dict
+
+@tool
+def search_tool(query: str) -> List[Dict[str, str]]:
+    """
+    ユーザーの質問に関連するドキュメントをナレッジベースから検索します。
+    """
+    print(f"「{query}」で検索を実行しました。")
+    # ...検索ロジック...
+    return [{"source": "doc1.txt", "content": f"「{query}」に関する情報です。"}]
+```
+
+#### ステップ2: ツールを直接呼び出すカスタムエージェントを作成する
+
+`BaseAgent`を継承し、`_run_async_impl`メソッド内で`search_tool`を直接呼び出します。
+```python
+# src/agent.py
+from google.adk.agents import BaseAgent
+from google.adk.agents.invocation_context import InvocationContext
+from google.adk.events import Event
+from typing import AsyncGenerator
+from .tools import search_tool
+
+class DeterministicSearchAgent(BaseAgent):
+    """受け取ったクエリを使い、必ずsearch_toolを呼び出すエージェント。"""
+    async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
+        query_to_search = ctx.session.state.get("query")
+        if not query_to_search:
+            yield Event(author=self.name, content={"error": "検索クエリが見つかりません。"})
+            return
+
+        # LLMの判断を介さず、ツールを直接呼び出す
+        search_results = search_tool(query=query_to_search)
+
+        # 結果を後続のエージェントが使えるようにstateに保存
+        ctx.session.state["search_results"] = search_results
+        
+        yield Event(
+            author=self.name,
+            content={"status": "success", "message": f"検索を実行し、{len(search_results)}件の結果をstateに保存しました。"}
+        )
+```
+
+#### ステップ3: ワークフローに組み込む
+
+作成したカスタムエージェントを`SequentialAgent`に組み込むことで、処理の順序を保証します。
+```python
+# src/workflow.py
+from google.adk.agents import SequentialAgent, LlmAgent
+from .agent import DeterministicSearchAgent
+
+# 決定論的な検索エージェント
+deterministic_search = DeterministicSearchAgent(name="DeterministicSearch")
+
+# 検索結果を要約するLLMエージェント
+summarizer_agent = LlmAgent(
+    name="Summarizer",
+    model="gemini-1.5-flash",
+    instruction="提供された検索結果を要約してください: {search_results}"
+)
+
+# 必ず「検索」→「要約」の順で実行されるワークフロー
+workflow = SequentialAgent(
+    name="DeterministicSearchWorkflow",
+    sub_agents=[
+        deterministic_search,
+        summarizer_agent
+    ]
+)
+```
+このように、LLMの自律的な判断（非決定論）と開発者による厳密な制御（決定論）を組み合わせることで、柔軟かつ信頼性の高いエージェントアプリケーションを構築できます。
