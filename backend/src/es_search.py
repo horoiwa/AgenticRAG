@@ -4,6 +4,8 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 import functools
+import collections
+import asyncio
 import time
 
 from elasticsearch import AsyncElasticsearch, NotFoundError
@@ -17,6 +19,8 @@ from src.settings import (
     EMBEDDING_MODEL,
     CHUNK_SIZE,
     NUM_CONTEXT_CHUNKS,
+    RRF_RANK_CONST,
+    RRF_TOP_K,
 )
 from src import utils
 from src.schemas import SearchResponse, Source
@@ -175,7 +179,8 @@ class ElasticsearchClient:
                 query={"multi_match": {"query": query, "fields": fields}},
                 size=size,
             )
-            search_response = format_search_results(response)
+            hits = response["hits"]["hits"]
+            search_response = format_search_results(hits)
             logger.info(
                 f"Search for '{query}' in '{index_name}' returned {len(search_response.results)} hits."
             )
@@ -189,46 +194,68 @@ class ElasticsearchClient:
     async def hybrid_search(
         self, query: str, size: int = 5, index_name: str = INDEX_NAME
     ) -> SearchResponse:
-        """ハイブリッド検索を実行します。
-        - キーワード検索： filenameとcontentフィールドを対象。full_textは検索対象外
-        - ベクトル検索： content_vectorフィールドを対象
-        """
+        """ハイブリッド検索を実行. RRFは有償版限定なので自力実装"""
 
         try:
-            # 1. クエリのベクトル化
+            # --- 1. キーワード検索 (BM25) ---
+            bm25_response = asyncio.create_task(
+                self.client.search(
+                    index=index_name,
+                    query={
+                        "multi_match": {
+                            "query": query,
+                            "fields": ["filename", "content"],
+                        }
+                    },
+                    size=RRF_TOP_K,
+                )
+            )
+
+            # --- 2. ベクトル検索 (kNN) ---
             query_vector = embed(query)[0]
+            knn_response = asyncio.create_task(
+                self.client.search(
+                    index=index_name,
+                    knn={
+                        "field": "content_vector",
+                        "query_vector": query_vector,
+                        "k": RRF_TOP_K,
+                        "num_candidates": RRF_TOP_K * 2,
+                    },
+                    _source=[
+                        "filepath",
+                        "filename",
+                        "content",
+                        "full_text",
+                        "chunk_id",
+                    ],  # kNNはデフォルトで_sourceを返さないため明示
+                    size=RRF_TOP_K,
+                )
+            )
 
-            # 2. ハイブリッド検索クエリの構築
-            search_query = {
-                "query": {
-                    "multi_match": {
-                        "query": query,
-                        "fields": ["filename", "content"],
-                    }
-                },
-                "knn": {
-                    "field": "content_vector",
-                    "query_vector": query_vector,
-                    "k": size,
-                    "num_candidates": 96,
-                },
-                # RRFは有償版限定機能
-                # "rank": {
-                #     "rrf": {
-                #         # RRFは kNN と query の両方の結果に適用される
-                #         "window_size": 48,  # 上位から何件をRRFの対象にするか
-                #         "rank_constant": 20,  # RRFのアルゴリズムパラメータ
-                #     }
-                # },
-                "size": size,
-            }
+            # --- 3. クライアント側で RRF による融合 ---
+            bm25_hits = (await bm25_response)["hits"]["hits"]
+            knn_hits = (await knn_response)["hits"]["hits"]
+            fused_scores = collections.defaultdict(lambda: 0.0)
 
-            # 3. 検索の実行
-            response = await self.client.search(index=index_name, body=search_query)
+            for rank, hit in enumerate(bm25_hits):
+                doc_id = hit["_id"]
+                score = 1.0 / (RRF_RANK_CONST + rank + 1)
+                fused_scores[doc_id] += score
+
+            for rank, hit in enumerate(knn_hits):
+                doc_id = hit["_id"]
+                score = 1.0 / (RRF_RANK_CONST + rank + 1)
+                fused_scores[doc_id] += score
+
+            sorted_results = sorted(
+                fused_scores.items(), key=lambda item: item[1], reverse=True
+            )
+            all_hits = {hit["_id"]: hit for hit in bm25_hits + knn_hits}
+            final_hits = [all_hits[doc_id] for doc_id, score in sorted_results[:size]]
 
             # 4. 結果の整形
-            search_response = format_search_results(response)
-
+            search_response = format_search_results(final_hits)
             logger.info(
                 f"Hybrid search for '{query}' in '{index_name}' returned {len(search_response.results)} hits."
             )
@@ -284,9 +311,9 @@ def embed(sentences: str | list[str]) -> list[list[float]]:
     return [e.tolist() for e in embeddings]
 
 
-def format_search_results(response: Dict[str, Any]) -> SearchResponse:
+def format_search_results(hits: list[dict]) -> SearchResponse:
     results = []
-    for hit in response["hits"]["hits"]:
+    for hit in hits:
         source_data = hit["_source"]
         source = Source(
             filepath=source_data["filepath"],
@@ -301,12 +328,22 @@ def format_search_results(response: Dict[str, Any]) -> SearchResponse:
 
 
 async def _debug_1():
-    path = "C:\\Users\\horoi\\Desktop\\AgenticRAG\\backend\\tests\\test_data\\1-1-1.pdf"
-    async with get_es_client() as es_client:
-        ret = await es_client.index_document(Path(path))
+    for path in Path(
+        "C:\\Users\\horoi\\Desktop\\AgenticRAG\\backend\\tests\\test_data"
+    ).glob("*.pdf"):
+        async with get_es_client() as es_client:
+            ret = await es_client.index_document(path)
 
 
 async def _debug_2():
+    async with get_es_client() as es_client:
+        ret = await es_client.search(
+            query="ロシアの状況", fields=["content"], index_name=INDEX_NAME
+        )
+    import pdb; pdb.set_trace()  # fmt: skip
+
+
+async def _debug_3():
     async with get_es_client() as es_client:
         ret = await es_client.hybrid_search(query="ロシアの状況")
     import pdb; pdb.set_trace()  # fmt: skip
@@ -315,4 +352,4 @@ async def _debug_2():
 if __name__ == "__main__":
     import asyncio
 
-    asyncio.run(_debug_2())
+    asyncio.run(_debug_3())
