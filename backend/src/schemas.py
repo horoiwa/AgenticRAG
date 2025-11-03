@@ -15,6 +15,7 @@ class Source(BaseModel):
     filename: str
     content: str
     full_text: str
+    chunk_id: int
     score: float
 
 

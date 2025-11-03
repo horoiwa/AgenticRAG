@@ -19,6 +19,7 @@ from src.settings import (
     NUM_CONTEXT_CHUNKS,
 )
 from src import utils
+from src.schemas import SearchResponse, Source
 
 # ロガーの設定
 logging.basicConfig(level=logging.INFO)
@@ -191,7 +192,7 @@ class ElasticsearchClient:
 
     async def hybrid_search(
         self, query: str, size: int = 5, index_name: str = INDEX_NAME
-    ):
+    ) -> SearchResponse:
         """ハイブリッド検索を実行します。
         - キーワード検索： filenameとcontentフィールドを対象。full_textは検索対象外
         - ベクトル検索： content_vectorフィールドを対象
@@ -222,22 +223,29 @@ class ElasticsearchClient:
             response = await self.client.search(index=index_name, body=search_query)
 
             # 4. 結果の整形
-            hits = []
+            results = []
             for hit in response["hits"]["hits"]:
-                hits.append(
-                    {"id": hit["_id"], "score": hit["_score"], "source": hit["_source"]}
+                source_data = hit["_source"]
+                source = Source(
+                    filepath=source_data["filepath"],
+                    filename=source_data["filename"],
+                    content=source_data["content"],
+                    full_text=source_data["full_text"],
+                    chunk_id=source_data["chunk_id"],
+                    score=hit["_score"],
                 )
+                results.append(source)
+
             logger.info(
-                f"Hybrid search for '{query}' in '{index_name}' returned {len(hits)} hits."
+                f"Hybrid search for '{query}' in '{index_name}' returned {len(results)} hits."
             )
-            import pdb; pdb.set_trace()  # fmt: skip
-            return hits
+            return SearchResponse(results=results)
         except Exception as e:
             logger.error(
                 f"Error during hybrid search in '{index_name}' for query '{query}': {e}"
             )
             logger.error(traceback.format_exc())
-            return []
+            return SearchResponse(results=[])
 
     async def get_document(self, index_name: str, id: str) -> Optional[Dict[str, Any]]:
         """ドキュメントIDでドキュメントを取得します。"""
@@ -292,6 +300,7 @@ async def _debug_1():
 async def _debug_2():
     async with get_es_client() as es_client:
         ret = await es_client.hybrid_search(query="ロシアの状況")
+    import pdb; pdb.set_trace()  # fmt: skip
 
 
 if __name__ == "__main__":
