@@ -75,7 +75,7 @@ async def test_index_document(es_client: ElasticsearchClient):
         results = await es_client.search(
             index_name=test_index_name, query="ロシア", fields=["content"]
         )
-        assert len(results.results) > 0
+        assert len(results) > 0
 
     finally:
         # テスト後にインデックスを削除
@@ -107,7 +107,7 @@ async def test_hybrid_search(es_client: ElasticsearchClient):
         search_response = await es_client.hybrid_search(
             query="ロシアの状況", index_name=test_index_name
         )
-        assert len(search_response.results) > 0
+        assert len(search_response) > 0
 
     finally:
         # テスト後にインデックスを削除

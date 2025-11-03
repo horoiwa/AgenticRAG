@@ -73,4 +73,9 @@ async def search(query: str):
 
 @app.get("/documents", response_model=List[Path])
 async def list_documents():
-    raise NotImplementedError()
+    """
+    Returns a list of unique file paths of documents stored in Elasticsearch.
+    """
+    async with get_es_client() as es_client:
+        documents = await es_client.get_document_list()
+    return documents
