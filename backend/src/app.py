@@ -76,28 +76,27 @@ async def search(query: str, index_name: str = settings.DEFAULT_INDEX_NAME):
 
 @app.post("/documents")
 async def upload_document(
-    file: UploadFile = File(...), index_name: str = settings.DEFAULT_INDEX_NAME
+    file: UploadFile = File(...),
+    prefix: str = "",
+    index_name: str = settings.DEFAULT_INDEX_NAME,
 ):
     """
     Uploads a new document, vectorizes it, and stores it in Elasticsearch.
+    同時に元ファイルもローカル保管
     """
     try:
-        # 一時ファイルに保存
-        with tempfile.NamedTemporaryFile(delete=False, suffix=file.filename) as tmp:
-            tmp.write(await file.read())
-            tmp_path = Path(tmp.name)
-
+        prefix = prefix.strip("/") if prefix else ""
+        file_path = settings.DATA_DIR / prefix / file.filename
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(file_path, "wb") as buffer:
+            buffer.write(await file.read())
         async with get_es_client() as es_client:
-            await es_client.index_document(file_path=tmp_path, index_name=index_name)
+            await es_client.index_document(file_path=file_path, index_name=index_name)
 
         return {"message": "Document indexed successfully"}
     except Exception as e:
         logger.error(f"Error indexing document: {e}")
         raise HTTPException(status_code=500, detail=f"Error indexing document: {e}")
-    finally:
-        # 一時ファイルを削除
-        if "tmp_path" in locals() and tmp_path.exists():
-            tmp_path.unlink()
 
 
 @app.get("/documents", response_model=List[Path])
@@ -112,16 +111,18 @@ async def list_documents(index_name: str = settings.DEFAULT_INDEX_NAME):
 
 @app.delete("/documents/{document_id}")
 async def delete_document(
-    document_path: Path, index_name: str = settings.DEFAULT_INDEX_NAME
+    file_path: Path, index_name: str = settings.DEFAULT_INDEX_NAME
 ):
     """
     Deletes a document from Elasticsearch based on its file_id.
     """
+    file_path = settings.DATA_DIR / str(file_path).lstrip("/")
+    if file_path.exists():
+        file_path.unlink()
+
     async with get_es_client() as es_client:
         try:
-            await es_client.delete_document(
-                file_path=document_path, index_name=index_name
-            )
+            await es_client.delete_document(file_path=file_path, index_name=index_name)
             return {"message": "Document deleted successfully"}
         except Exception as e:
             logger.error(f"Error deleting document: {e}")
