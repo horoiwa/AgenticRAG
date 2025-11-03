@@ -321,7 +321,6 @@ def format_search_results(hits: list[dict]) -> SearchResponse:
             content=source_data["content"],
             full_text=source_data["full_text"],
             chunk_id=source_data["chunk_id"],
-            score=hit["_score"],
         )
         results.append(source)
     return SearchResponse(results=results)

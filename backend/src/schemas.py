@@ -16,7 +16,6 @@ class Source(BaseModel):
     content: str
     full_text: str
     chunk_id: int
-    score: float
 
 
 class ChatRequest(BaseModel):
