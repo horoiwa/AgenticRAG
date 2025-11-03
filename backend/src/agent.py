@@ -40,10 +40,28 @@ class SearchAgent(BaseAgent):
             search_results: list[Source] = await es_client.hybrid_search(query=query)
 
         for i, search_result in enumerate(search_results, start=1):
-            ctx.session.state[f"filename_{i}"] = search_result.filename
-            ctx.session.state[f"content_{i}"] = search_result.full_text
+            ctx.session.state.update(
+                {
+                    f"filename_{i}": search_result.filename,
+                    f"content_{i}": search_result.full_text,
+                }
+            )
 
-        yield Event(author=self.name)
+        yield Event(
+            author=self.name,
+            content=types.Content(
+                role=self.name,
+                parts=[
+                    types.Part(
+                        text=f"{len(search_results)}件の参考資料が見つかりました",
+                        function_response=types.FunctionResponse(
+                            response={"search_results": search_results}
+                        ),
+                    )
+                ],
+            ),
+            # actions=EventActions(set_session_state={"search_results": search_results}),
+        )
 
 
 search_agent = SearchAgent(name="search_agent")
@@ -85,12 +103,15 @@ from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
 
-async def call_agent_async(query: str, runner, user_id, session_id):
+async def call_agent_async(query: str, runner, app_name, user_id, session_id):
     """Sends a query to the agent and prints the final response."""
     print(f"\n>>> User Query: {query}")
 
     # Prepare the user's message in ADK format
-    content = types.Content(role="user", parts=[types.Part(text=query)])
+    content = types.Content(
+        role="user",
+        parts=[types.Part(text=query)],
+    )
 
     final_response_text = "Agent did not produce a final response."  # Default
 
@@ -101,8 +122,10 @@ async def call_agent_async(query: str, runner, user_id, session_id):
     ):
         # You can uncomment the line below to see *all* events during execution
         print(
-            f"  [Event] Author: {event.author}, Type: {type(event).__name__}, Final: {event.is_final_response()}, Content: {event.content}"
+            f"  [Event] Author: {event.author}, Type: {type(event).__name__}, Final: {event.is_final_response()}, Content: {event.content.parts[0].text}"
         )
+        if func_res := event.content.parts[0].function_response:
+            search_results: list[Source] = func_res.response["search_results"]
 
         # Key Concept: is_final_response() marks the concluding message for the turn.
         if event.is_final_response():
@@ -117,6 +140,14 @@ async def call_agent_async(query: str, runner, user_id, session_id):
                 )
 
     print(f"<<< Agent Response: {final_response_text}")
+
+    print()
+    print("=========")
+    session = await runner.session_service.get_session(
+        app_name=app_name, user_id=user_id, session_id=session_id
+    )
+    print(session.state)
+    print(session.state.get("search_results", "NO_DATA"))
 
 
 async def debug_1():
@@ -145,12 +176,7 @@ async def debug_1():
         session_service=session_service,  # Uses our session manager
     )
     query = "ロシアの状況はどのようになっている？"
-    await call_agent_async(query, runner, USER_ID, SESSION_ID)
-
-    ret = await session_service.get_session(
-        app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID
-    )
-    import pdb; pdb.set_trace()  # fmt: skip
+    await call_agent_async(query, runner, APP_NAME, USER_ID, SESSION_ID)
 
 
 if __name__ == "__main__":
