@@ -9,21 +9,28 @@ class DocumentStatus(str, Enum):
     PROCESSING = "processing"
     FAILED = "failed"
 
+
 class Source(BaseModel):
-    document_id: str
-    document_name: str
-    snippet: str
+    filepath: str
+    filename: str
+    content: str
+    full_text: str
+    score: float
+
 
 class ChatRequest(BaseModel):
     query: str
     session_id: Optional[str] = None
 
+
 class ChatResponse(BaseModel):
     answer: str
     sources: List[Source]
 
+
 class SearchResponse(BaseModel):
     results: List[Source]
+
 
 class DocumentMetadata(BaseModel):
     document_id: str
