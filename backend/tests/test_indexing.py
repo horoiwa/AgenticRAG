@@ -7,6 +7,8 @@ from src.es_search import get_es_client, ElasticsearchClient
 
 INDEX_NAME = "test_index"
 
+SAMPLE_DATA_DIR = Path(__file__).resolve().parent / "test_data"
+
 
 @pytest_asyncio.fixture
 async def es_client() -> AsyncGenerator[ElasticsearchClient, None]:
@@ -58,18 +60,22 @@ async def test_index_document(es_client: ElasticsearchClient):
         await es_client.create_index(test_index_name)
 
         # テスト用PDFファイル
-        pdf_path = Path("C:/Users/horoi/Desktop/AgenticRAG/backend/tests/test_data/1-1-1.pdf")
+        pdf_path = Path(
+            "C:/Users/horoi/Desktop/AgenticRAG/backend/tests/test_data/1-1-1.pdf"
+        )
 
         # ドキュメントをインデックス
-        indexed = await es_client.index_document(file_path=pdf_path, index_name=test_index_name)
+        indexed = await es_client.index_document(
+            file_path=pdf_path, index_name=test_index_name
+        )
         assert indexed
 
         # インデックスされたドキュメントを検索
-        await asyncio.sleep(1) # refreshされるまで少し待つ
+        await asyncio.sleep(1)  # refreshされるまで少し待つ
         results = await es_client.search(
             index_name=test_index_name, query="ロシア", fields=["content"]
         )
-        assert len(results.results) > 0
+        assert len(results) > 0
 
     finally:
         # テスト後にインデックスを削除
@@ -86,18 +92,48 @@ async def test_hybrid_search(es_client: ElasticsearchClient):
         await es_client.create_index(test_index_name)
 
         # テスト用PDFファイル
-        pdf_path = Path("C:/Users/horoi/Desktop/AgenticRAG/backend/tests/test_data/1-1-1.pdf")
+        pdf_path = Path(
+            "C:/Users/horoi/Desktop/AgenticRAG/backend/tests/test_data/1-1-1.pdf"
+        )
 
         # ドキュメントをインデックス
-        indexed = await es_client.index_document(file_path=pdf_path, index_name=test_index_name)
+        indexed = await es_client.index_document(
+            file_path=pdf_path, index_name=test_index_name
+        )
         assert indexed
 
         # ハイブリッド検索を実行
-        await asyncio.sleep(1) # refreshされるまで少し待つ
+        await asyncio.sleep(1)  # refreshされるまで少し待つ
         search_response = await es_client.hybrid_search(
             query="ロシアの状況", index_name=test_index_name
         )
-        assert len(search_response.results) > 0
+        assert len(search_response) > 0
+
+    finally:
+        # テスト後にインデックスを削除
+        await es_client.delete_index(test_index_name)
+
+
+@pytest.mark.asyncio
+async def test_get_document_list(es_client: ElasticsearchClient):
+    """
+    インデックスされたドキュメントのリスト取得をテストします。
+    """
+    test_index_name = "test_get_document_list"
+    try:
+        await es_client.create_index(test_index_name)
+
+        sample_file_paths = [p for p in SAMPLE_DATA_DIR.glob("*.pdf")]
+        for path in sample_file_paths:
+            await es_client.index_document(file_path=path, index_name=test_index_name)
+        await asyncio.sleep(1)  # refreshされるまで少し待つ
+
+        # ドキュメントリストを取得
+        doc_list = await es_client.get_document_list(index_name=test_index_name)
+
+        assert len(doc_list) == len(sample_file_paths)
+        for path in sample_file_paths:
+            assert path in doc_list
 
     finally:
         # テスト後にインデックスを削除

@@ -1,18 +1,16 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from typing import List
-from datetime import datetime
-import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
+import logging
+import tempfile
 
 from src.es_search import get_es_client
 from src import settings
 from src.schemas import (
     ChatRequest,
     ChatResponse,
-    SearchResponse,
-    DocumentMetadata,
     Source,
-    DocumentStatus,
 )
 
 # ロガーの設定
@@ -32,15 +30,15 @@ async def lifespan_event_handler(app: FastAPI):
             )
 
         # RAG用インデックスの作成（存在しない場合）
-        if not await es_client.create_index(settings.INDEX_NAME):
+        if not await es_client.create_index(settings.DEFAULT_INDEX_NAME):
             logger.error(
-                f"Failed to create or ensure index '{settings.INDEX_NAME}'. Exiting."
+                f"Failed to create or ensure index '{settings.DEFAULT_INDEX_NAME}'. Exiting."
             )
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to create or ensure index '{settings.INDEX_NAME}'",
+                detail=f"Failed to create or ensure index '{settings.DEFAULT_INDEX_NAME}'",
             )
-        logger.info(f"Elasticsearch index '{settings.INDEX_NAME}' is ready.")
+        logger.info(f"Elasticsearch index '{settings.DEFAULT_INDEX_NAME}' is ready.")
     yield
     logger.info("Shutting down application...")
 
@@ -63,56 +61,71 @@ async def chat(request: ChatRequest):
     """
     Receives a query, performs RAG, and returns an answer with sources.
     """
-    # (仮のレスポンス)
-    dummy_source = Source(
-        document_id="doc_123",
-        document_name="Example Document",
-        snippet="This is a snippet from the example document.",
-    )
-    dummy_answer = f"This is a dummy answer to your query: '{request.query}'"
-
-    return ChatResponse(answer=dummy_answer, sources=[dummy_source])
+    raise NotImplementedError()
 
 
-@app.get("/search", response_model=SearchResponse)
-async def search(query: str):
+@app.get("/search", response_model=List[Source])
+async def search(query: str, index_name: str = settings.DEFAULT_INDEX_NAME):
     """
-    Performs a simple keyword search based on the user's query and returns the results.
+    Performs a hybrid search based on the user's query and returns the results.
     """
-    es_client = await get_es_client()
-    if not await es_client.ping():
-        raise HTTPException(
-            status_code=500, detail="Failed to connect to Elasticsearch"
-        )
+    async with get_es_client() as es_client:
+        results = await es_client.hybrid_search(query=query, index_name=index_name)
+    return results
 
-    search_results = await es_client.search(
-        index_name=settings.INDEX_NAME, query=query, fields=["content", "document_name"]
-    )
 
-    sources = []
-    for hit in search_results:
-        source_data = hit["source"]
-        sources.append(
-            Source(
-                document_id=source_data.get("document_id", "unknown"),
-                document_name=source_data.get("document_name", "unknown"),
-                snippet=source_data.get("content", ""),
+@app.post("/documents")
+async def upload_document(
+    file: UploadFile = File(...),
+    prefix: str = "",
+    index_name: str = settings.DEFAULT_INDEX_NAME,
+):
+    """
+    Uploads a new document, vectorizes it, and stores it in Elasticsearch.
+    同時に元ファイルもローカル保管
+    """
+    try:
+        prefix = prefix.replace("\\", "/").strip("/") if prefix else ""
+        file_path = settings.DATA_DIR / prefix / file.filename
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(file_path, "wb") as buffer:
+            buffer.write(await file.read())
+        async with get_es_client() as es_client:
+            await es_client.index_document(file_path=file_path, index_name=index_name)
+
+        return {"message": "Document indexed successfully"}
+    except Exception as e:
+        logger.error(f"Error indexing document: {e}")
+        raise HTTPException(status_code=500, detail=f"Error indexing document: {e}")
+
+
+@app.get("/documents", response_model=List[Path])
+async def list_documents(index_name: str = settings.DEFAULT_INDEX_NAME):
+    """
+    Returns a list of unique file paths of documents stored in Elasticsearch.
+    """
+    async with get_es_client() as es_client:
+        documents = await es_client.get_document_list(index_name=index_name)
+    return documents
+
+
+@app.delete("/documents")
+async def delete_document(
+    file_path: Path, index_name: str = settings.DEFAULT_INDEX_NAME
+):
+    """
+    Deletes a document from Elasticsearch based on its file_id.
+    """
+    raw_file_path = settings.DATA_DIR / str(file_path).replace("\\", "/").lstrip("/")
+    if raw_file_path.exists():
+        raw_file_path.unlink()
+
+    async with get_es_client() as es_client:
+        try:
+            await es_client.delete_document(
+                file_path=raw_file_path, index_name=index_name
             )
-        )
-
-    return SearchResponse(results=sources)
-
-
-@app.get("/documents", response_model=List[DocumentMetadata])
-async def list_documents():
-    """
-    Lists metadata of all uploaded documents.
-    """
-    # (仮のレスポンス)
-    dummy_doc = DocumentMetadata(
-        document_id="doc_456",
-        document_name="Another Example.txt",
-        uploaded_at=datetime.now(),
-        status=DocumentStatus.COMPLETED,
-    )
-    return [dummy_doc]
+            return {"message": "Document deleted successfully"}
+        except Exception as e:
+            logger.error(f"Error deleting document: {e}")
+            raise HTTPException(status_code=500, detail=f"Error deleting document: {e}")

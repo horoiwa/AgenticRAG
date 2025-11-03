@@ -14,7 +14,7 @@ from sentence_transformers import SentenceTransformer
 from src.settings import (
     ELASTIC_SEARCH_HOST,
     USE_DEVICE,
-    INDEX_NAME,
+    DEFAULT_INDEX_NAME,
     EMBEDDING_DIM,
     EMBEDDING_MODEL,
     CHUNK_SIZE,
@@ -23,7 +23,7 @@ from src.settings import (
     RRF_TOP_K,
 )
 from src import utils
-from src.schemas import SearchResponse, Source
+from src.schemas import Source
 
 # ロガーの設定
 logging.basicConfig(level=logging.INFO)
@@ -105,7 +105,7 @@ class ElasticsearchClient:
             return False
 
     async def index_document(
-        self, file_path: Path, index_name: str = INDEX_NAME
+        self, file_path: Path, index_name: str = DEFAULT_INDEX_NAME
     ) -> bool:
         """
         ドキュメントを解析、チャンク化し、Elasticsearchにインデックスします。
@@ -113,7 +113,7 @@ class ElasticsearchClient:
         """
         try:
             logger.info(f"Starting to index document: {file_path}")
-
+            file_path = file_path.resolve() if file_path.is_absolute() else file_path
             markdown_text = utils.to_markdown(file_path)
             chunks: list[str] = [
                 markdown_text[i : i + CHUNK_SIZE]
@@ -144,11 +144,7 @@ class ElasticsearchClient:
                 docs.append(doc)
 
             # 1. filepath==str(file_path)の既存レコードをすべて削除
-            await self.client.delete_by_query(
-                index=index_name,
-                body={"query": {"term": {"filepath": str(file_path)}}},
-                refresh=True,
-            )
+            await self.delete_document(file_path=file_path, index_name=index_name)
 
             # 2. docsをindexに登録
             operations = []
@@ -167,9 +163,18 @@ class ElasticsearchClient:
             logger.error(traceback.format_exc())
             return False
 
+    async def delete_document(
+        self, file_path: Path, index_name: str = DEFAULT_INDEX_NAME
+    ):
+        await self.client.delete_by_query(
+            index=index_name,
+            body={"query": {"term": {"filepath": str(file_path)}}},
+            refresh=True,
+        )
+
     async def search(
         self, index_name: str, query: str, fields: List[str], size: int = 5
-    ) -> SearchResponse:
+    ) -> List[Source]:
         """
         指定されたインデックスとフィールドに対して全文検索を実行します。
         """
@@ -180,20 +185,20 @@ class ElasticsearchClient:
                 size=size,
             )
             hits = response["hits"]["hits"]
-            search_response = format_search_results(hits)
+            search_response: List[Source] = format_search_results(hits)
             logger.info(
-                f"Search for '{query}' in '{index_name}' returned {len(search_response.results)} hits."
+                f"Search for '{query}' in '{index_name}' returned {len(search_response)} hits."
             )
             return search_response
         except Exception as e:
             logger.error(
                 f"Error during search in '{index_name}' for query '{query}': {e}"
             )
-            return SearchResponse(results=[])
+            return []
 
     async def hybrid_search(
-        self, query: str, size: int = 5, index_name: str = INDEX_NAME
-    ) -> SearchResponse:
+        self, query: str, size: int = 5, index_name: str = DEFAULT_INDEX_NAME
+    ) -> List[Source]:
         """ハイブリッド検索を実行. RRFは有償版限定なので自力実装"""
 
         try:
@@ -233,7 +238,7 @@ class ElasticsearchClient:
                 )
             )
 
-            # --- 3. クライアント側で RRF による融合 ---
+            # --- 3. 自力RRF ---
             bm25_hits = (await bm25_response)["hits"]["hits"]
             knn_hits = (await knn_response)["hits"]["hits"]
             fused_scores = collections.defaultdict(lambda: 0.0)
@@ -255,9 +260,9 @@ class ElasticsearchClient:
             final_hits = [all_hits[doc_id] for doc_id, score in sorted_results[:size]]
 
             # 4. 結果の整形
-            search_response = format_search_results(final_hits)
+            search_response: List[Source] = format_search_results(final_hits)
             logger.info(
-                f"Hybrid search for '{query}' in '{index_name}' returned {len(search_response.results)} hits."
+                f"Hybrid search for '{query}' in '{index_name}' returned {len(search_response)} hits."
             )
             return search_response
         except Exception as e:
@@ -265,20 +270,36 @@ class ElasticsearchClient:
                 f"Error during hybrid search in '{index_name}' for query '{query}': {e}"
             )
             logger.error(traceback.format_exc())
-            return SearchResponse(results=[])
+            return []
 
-    async def get_document(self, index_name: str, id: str) -> Optional[Dict[str, Any]]:
-        """ドキュメントIDでドキュメントを取得します。"""
+    async def get_document_list(
+        self, index_name: str = DEFAULT_INDEX_NAME
+    ) -> list[Path]:
+        """ユニークなファイルパスのリストを取得します。"""
         try:
-            response = await self.client.get(index=index_name, id=id)
-            logger.info(f"Document '{id}' retrieved from '{index_name}'.")
-            return response["_source"]
-        except NotFoundError:
-            logger.warning(f"Document '{id}' not found in '{index_name}'.")
-            return None
+            query = {
+                "size": 0,
+                "aggs": {
+                    "unique_filepaths": {
+                        "terms": {
+                            "field": "filepath",
+                            "size": 10000,  # Get up to 10,000 unique file paths
+                        }
+                    }
+                },
+            }
+            response = await self.client.search(index=index_name, body=query)
+            filepaths = [
+                Path(bucket["key"])
+                for bucket in response["aggregations"]["unique_filepaths"]["buckets"]
+            ]
+            logger.info(
+                f"Found {len(filepaths)} unique documents in index '{index_name}'."
+            )
+            return filepaths
         except Exception as e:
-            logger.error(f"Error getting document '{id}' from '{index_name}': {e}")
-            return None
+            logger.error(f"Error getting document list from index '{index_name}': {e}")
+            return []
 
 
 @asynccontextmanager
@@ -311,7 +332,7 @@ def embed(sentences: str | list[str]) -> list[list[float]]:
     return [e.tolist() for e in embeddings]
 
 
-def format_search_results(hits: list[dict]) -> SearchResponse:
+def format_search_results(hits: list[dict]) -> List[Source]:
     results = []
     for hit in hits:
         source_data = hit["_source"]
@@ -323,7 +344,7 @@ def format_search_results(hits: list[dict]) -> SearchResponse:
             chunk_id=source_data["chunk_id"],
         )
         results.append(source)
-    return SearchResponse(results=results)
+    return results
 
 
 async def _debug_1():
@@ -337,7 +358,7 @@ async def _debug_1():
 async def _debug_2():
     async with get_es_client() as es_client:
         ret = await es_client.search(
-            query="ロシアの状況", fields=["content"], index_name=INDEX_NAME
+            query="ロシアの状況", fields=["content"], index_name=DEFAULT_INDEX_NAME
         )
     import pdb; pdb.set_trace()  # fmt: skip
 

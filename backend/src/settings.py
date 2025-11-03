@@ -1,11 +1,16 @@
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
+
+
+DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 
 load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", None)
 ELASTIC_SEARCH_HOST = os.getenv("ELASTIC_SEARCH_HOST", None)
-INDEX_NAME = "documents-v1"
+DEFAULT_INDEX_NAME = "documents-v1"
 USE_DEVICE = "cpu"  # cpu or cuda
 EMBEDDING_MODEL = "cl-nagoya/ruri-v3-30m"
 EMBEDDING_DIM = 256
