@@ -189,6 +189,16 @@ class ElasticsearchClient:
             )
             return []
 
+    async def hybrid_search(
+        self, query: str, size: int = 5, index_name: str = INDEX_NAME
+    ):
+        """ハイブリッド検索を実行します。
+        - キーワード検索： filenameとcontentフィールドを対象。full_textは検索対象外
+        - ベクトル検索： content_vectorフィールドを対象
+        """
+
+        pass
+
     async def get_document(self, index_name: str, id: str) -> Optional[Dict[str, Any]]:
         """ドキュメントIDでドキュメントを取得します。"""
         try:
