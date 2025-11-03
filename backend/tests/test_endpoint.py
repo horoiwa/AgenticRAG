@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pathlib import Path
 import asyncio
+import shutil
 
 from src.app import app
 from src.es_search import get_es_client
@@ -66,45 +67,67 @@ def test_search_endpoint(client: TestClient, monkeypatch):
         assert item["filename"] == "1-1-1.pdf"
 
 
-def test_documents_endpoint(client: TestClient):
+@pytest.mark.asyncio
+async def test_documents_endpoint(client: TestClient):
     """
     Tests the /documents endpoint.
     """
     # Test file path
     pdf_path = Path(__file__).resolve().parent / "test_data" / "1-2-1.pdf"
+    try:
+        # 1. POST /documents (Upload)
+        with open(pdf_path, "rb") as f:
+            response = client.post(
+                "/documents",
+                files={"file": (pdf_path.name, f, "application/pdf")},
+                params={"prefix": TEST_PREFIX, "index_name": TEST_INDEX_NAME},
+            )
 
-    # 1. POST /documents (Upload)
-    with open(pdf_path, "rb") as f:
-        response = client.post(
-            "/documents",
-            files={"file": (pdf_path.name, f, "application/pdf")},
-            params={"prefix": TEST_PREFIX, "index_name": TEST_INDEX_NAME},
-        )
+        assert response.status_code == 200
+        assert response.json()["message"] == "Document indexed successfully"
 
-    assert response.status_code == 200
-    assert response.json()["message"] == "Document indexed successfully"
-
-    # Allow time for Elasticsearch to index the document
-    async def wait_for_indexing():
+        # Allow time for Elasticsearch to index the document
         await asyncio.sleep(1)
 
-    asyncio.run(wait_for_indexing())
+        # 2. GET /documents (List)
+        response = client.get("/documents", params={"index_name": TEST_INDEX_NAME})
+        assert response.status_code == 200
+        documents: list[str] = response.json()
+        assert isinstance(documents, list)
+        assert any(Path(doc).name == pdf_path.name for doc in documents)
 
-    # 2. GET /documents (List)
-    response = client.get("/documents", params={"index_name": TEST_INDEX_NAME})
-    assert response.status_code == 200
-    documents: list[str] = response.json()
-    assert isinstance(documents, list)
-    assert any(Path(doc).name == pdf_path.name for doc in documents)
+        # 3. DELETE /documents/{document_id}
+        # Find the document_id (file_id) from the GET /documents response
+        response = client.delete(
+            "/documents",
+            params={
+                "file_path": Path(TEST_PREFIX) / pdf_path.name,
+                "index_name": TEST_INDEX_NAME,
+            },
+        )
 
-    # 3. DELETE /documents/{document_id}
-    # Find the document_id (file_id) from the GET /documents response
+        assert response.status_code == 200
+        assert response.json()["message"] == "Document deleted successfully"
 
-    # Allow time for Elasticsearch to delete the document
-    asyncio.run(wait_for_indexing())
+        # Allow time for Elasticsearch to delete the document
+        await asyncio.sleep(1)
 
-    # 4. GET /documents (Verify deletion)
-    response = client.get("/documents", params={"index_name": TEST_INDEX_NAME})
-    assert response.status_code == 200
-    documents_after_delete = response.json()
-    assert not any(doc["filename"] == pdf_path.name for doc in documents_after_delete)
+        # Construct the expected local file path
+        expected_local_file_path = (
+            settings.DATA_DIR / TEST_PREFIX.lstrip("/") / pdf_path.name
+        )
+
+        # Verify local file deletion
+        assert not expected_local_file_path.exists()
+
+        # Verify deletion from Elasticsearch using GET /documents
+        response = client.get("/documents", params={"index_name": TEST_INDEX_NAME})
+        assert response.status_code == 200
+        documents_after_delete = response.json()
+        assert not any(
+            Path(doc) == expected_local_file_path for doc in documents_after_delete
+        )
+    finally:
+        test_data_dir = settings.DATA_DIR / TEST_PREFIX.lstrip("/")
+        if test_data_dir.exists():
+            shutil.rmtree(test_data_dir)

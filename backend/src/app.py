@@ -85,7 +85,7 @@ async def upload_document(
     同時に元ファイルもローカル保管
     """
     try:
-        prefix = prefix.strip("/") if prefix else ""
+        prefix = prefix.replace("\\", "/").strip("/") if prefix else ""
         file_path = settings.DATA_DIR / prefix / file.filename
         file_path.parent.mkdir(parents=True, exist_ok=True)
         with open(file_path, "wb") as buffer:
@@ -116,7 +116,7 @@ async def delete_document(
     """
     Deletes a document from Elasticsearch based on its file_id.
     """
-    raw_file_path = settings.DATA_DIR / str(file_path).lstrip("/")
+    raw_file_path = settings.DATA_DIR / str(file_path).replace("\\", "/").lstrip("/")
     if raw_file_path.exists():
         raw_file_path.unlink()
 
