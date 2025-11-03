@@ -1,10 +1,11 @@
-
 import pytest
 import pytest_asyncio
 import asyncio
 from typing import AsyncGenerator
 from pathlib import Path
+
 from src.es_search import get_es_client, ElasticsearchClient
+from src import schemas
 
 INDEX_NAME = "test_index"
 
@@ -59,18 +60,22 @@ async def test_index_document(es_client: ElasticsearchClient):
         await es_client.create_index(test_index_name)
 
         # テスト用PDFファイル
-        pdf_path = Path("C:/Users/horoi/Desktop/AgenticRAG/backend/tests/test_data/1-1-1.pdf")
+        pdf_path = Path(
+            "C:/Users/horoi/Desktop/AgenticRAG/backend/tests/test_data/1-1-1.pdf"
+        )
 
         # ドキュメントをインデックス
-        indexed = await es_client.index_document(file_path=pdf_path, index_name=test_index_name)
+        indexed = await es_client.index_document(
+            file_path=pdf_path, index_name=test_index_name
+        )
         assert indexed
 
         # インデックスされたドキュメントを検索
-        await asyncio.sleep(1) # refreshされるまで少し待つ
-        results = await es_client.search(
+        await asyncio.sleep(1)  # refreshされるまで少し待つ
+        res: schemas.SearchResponse = await es_client.search(
             index_name=test_index_name, query="ロシア", fields=["content"]
         )
-        assert len(results) > 0
+        assert len(res.results) > 0
 
     finally:
         # テスト後にインデックスを削除
