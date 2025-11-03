@@ -21,7 +21,7 @@ def timer(func):
         start_time = time.time()
         retval = func(*args, **kwargs)
         elapsed = time.time() - start_time
-        logger.info("Elapsed: {elapsed:.2f}[sec]")
+        logger.info(f"Elapsed: {elapsed:.2f}[sec]")
         return retval
 
     return wrapper

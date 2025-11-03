@@ -197,7 +197,47 @@ class ElasticsearchClient:
         - ベクトル検索： content_vectorフィールドを対象
         """
 
-        pass
+        try:
+            # 1. クエリのベクトル化
+            query_vector = embed(query)[0]
+
+            # 2. ハイブリッド検索クエリの構築
+            search_query = {
+                "query": {
+                    "multi_match": {
+                        "query": query,
+                        "fields": ["filename", "content"],
+                    }
+                },
+                "knn": {
+                    "field": "content_vector",
+                    "query_vector": query_vector,
+                    "k": size,
+                    "num_candidates": 100,
+                },
+                "size": size,
+            }
+
+            # 3. 検索の実行
+            response = await self.client.search(index=index_name, body=search_query)
+
+            # 4. 結果の整形
+            hits = []
+            for hit in response["hits"]["hits"]:
+                hits.append(
+                    {"id": hit["_id"], "score": hit["_score"], "source": hit["_source"]}
+                )
+            logger.info(
+                f"Hybrid search for '{query}' in '{index_name}' returned {len(hits)} hits."
+            )
+            import pdb; pdb.set_trace()  # fmt: skip
+            return hits
+        except Exception as e:
+            logger.error(
+                f"Error during hybrid search in '{index_name}' for query '{query}': {e}"
+            )
+            logger.error(traceback.format_exc())
+            return []
 
     async def get_document(self, index_name: str, id: str) -> Optional[Dict[str, Any]]:
         """ドキュメントIDでドキュメントを取得します。"""
@@ -243,13 +283,18 @@ def embed(sentences: str | list[str]) -> list[list[float]]:
     return [e.tolist() for e in embeddings]
 
 
-async def _debug():
+async def _debug_1():
     path = "C:\\Users\\horoi\\Desktop\\AgenticRAG\\backend\\tests\\test_data\\1-1-1.pdf"
     async with get_es_client() as es_client:
         ret = await es_client.index_document(Path(path))
 
 
+async def _debug_2():
+    async with get_es_client() as es_client:
+        ret = await es_client.hybrid_search(query="ロシアの状況")
+
+
 if __name__ == "__main__":
     import asyncio
 
-    asyncio.run(_debug())
+    asyncio.run(_debug_2())
