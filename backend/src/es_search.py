@@ -14,7 +14,7 @@ from sentence_transformers import SentenceTransformer
 from src.settings import (
     ELASTIC_SEARCH_HOST,
     USE_DEVICE,
-    INDEX_NAME,
+    DEFAULT_INDEX_NAME,
     EMBEDDING_DIM,
     EMBEDDING_MODEL,
     CHUNK_SIZE,
@@ -105,7 +105,7 @@ class ElasticsearchClient:
             return False
 
     async def index_document(
-        self, file_path: Path, index_name: str = INDEX_NAME
+        self, file_path: Path, index_name: str = DEFAULT_INDEX_NAME
     ) -> bool:
         """
         ドキュメントを解析、チャンク化し、Elasticsearchにインデックスします。
@@ -192,7 +192,7 @@ class ElasticsearchClient:
             return []
 
     async def hybrid_search(
-        self, query: str, size: int = 5, index_name: str = INDEX_NAME
+        self, query: str, size: int = 5, index_name: str = DEFAULT_INDEX_NAME
     ) -> List[Source]:
         """ハイブリッド検索を実行. RRFは有償版限定なので自力実装"""
 
@@ -267,7 +267,9 @@ class ElasticsearchClient:
             logger.error(traceback.format_exc())
             return []
 
-    async def get_document_list(self, index_name: str = INDEX_NAME) -> list[Path]:
+    async def get_document_list(
+        self, index_name: str = DEFAULT_INDEX_NAME
+    ) -> list[Path]:
         """ユニークなファイルパスのリストを取得します。"""
         try:
             query = {
@@ -351,7 +353,7 @@ async def _debug_1():
 async def _debug_2():
     async with get_es_client() as es_client:
         ret = await es_client.search(
-            query="ロシアの状況", fields=["content"], index_name=INDEX_NAME
+            query="ロシアの状況", fields=["content"], index_name=DEFAULT_INDEX_NAME
         )
     import pdb; pdb.set_trace()  # fmt: skip
 

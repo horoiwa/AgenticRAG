@@ -29,15 +29,15 @@ async def lifespan_event_handler(app: FastAPI):
             )
 
         # RAG用インデックスの作成（存在しない場合）
-        if not await es_client.create_index(settings.INDEX_NAME):
+        if not await es_client.create_index(settings.DEFAULT_INDEX_NAME):
             logger.error(
-                f"Failed to create or ensure index '{settings.INDEX_NAME}'. Exiting."
+                f"Failed to create or ensure index '{settings.DEFAULT_INDEX_NAME}'. Exiting."
             )
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to create or ensure index '{settings.INDEX_NAME}'",
+                detail=f"Failed to create or ensure index '{settings.DEFAULT_INDEX_NAME}'",
             )
-        logger.info(f"Elasticsearch index '{settings.INDEX_NAME}' is ready.")
+        logger.info(f"Elasticsearch index '{settings.DEFAULT_INDEX_NAME}' is ready.")
     yield
     logger.info("Shutting down application...")
 
@@ -64,18 +64,20 @@ async def chat(request: ChatRequest):
 
 
 @app.get("/search", response_model=List[Source])
-async def search(query: str):
+async def search(query: str, index_name: str = settings.DEFAULT_INDEX_NAME):
     """
-    Performs a simple keyword search based on the user's query and returns the results.
+    Performs a hybrid search based on the user's query and returns the results.
     """
-    raise NotImplementedError()
+    async with get_es_client() as es_client:
+        results = await es_client.hybrid_search(query=query, index_name=index_name)
+    return results
 
 
 @app.get("/documents", response_model=List[Path])
-async def list_documents():
+async def list_documents(index_name: str = settings.DEFAULT_INDEX_NAME):
     """
     Returns a list of unique file paths of documents stored in Elasticsearch.
     """
     async with get_es_client() as es_client:
-        documents = await es_client.get_document_list()
+        documents = await es_client.get_document_list(index_name=index_name)
     return documents
