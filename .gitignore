@@ -3,6 +3,7 @@ __pycache__/
 *.py[codz]
 *$py.class
 data/
+adk-samples/
 
 # C extensions
 *.so

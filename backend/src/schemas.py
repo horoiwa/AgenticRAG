@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Literal
 from datetime import datetime
 from enum import Enum
 
@@ -12,9 +12,14 @@ class Source(BaseModel):
     chunk_id: int
 
 
+class ChatContext(BaseModel):
+    role: Literal["system", "user", "assistant"]
+    content: str
+
+
 class ChatRequest(BaseModel):
     query: str
-    session_id: Optional[str] = None
+    context: List[ChatContext] | None = None
 
 
 class ChatResponse(BaseModel):

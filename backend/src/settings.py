@@ -19,3 +19,4 @@ NUM_CONTEXT_CHUNKS = 2
 SUPPORTED_EXT = [".pdf", ".docx", ".pptx", ".txt"]
 RRF_RANK_CONST = 60
 RRF_TOP_K = 20
+LLM = "gemini-2.5-flash-lite"

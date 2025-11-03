@@ -5,6 +5,11 @@ from pathlib import Path
 import logging
 import tempfile
 
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
+from google.genai import types as genai_types
+
+from src.agent import root_agent
 from src.es_search import get_es_client
 from src import settings
 from src.schemas import (
@@ -12,6 +17,14 @@ from src.schemas import (
     ChatResponse,
     Source,
 )
+
+
+# --- ADK Runnerの初期化 ---
+session_service = InMemorySessionService()
+runner = Runner(
+    app_name="agentic_rag", agent=root_agent, session_service=session_service
+)
+
 
 # ロガーの設定
 logging.basicConfig(level=logging.INFO)
@@ -54,14 +67,27 @@ app = FastAPI(
 
 
 # --- エンドポイントの定義 ---
-
-
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """
     Receives a query, performs RAG, and returns an answer with sources.
     """
-    raise NotImplementedError()
+    session_id = request.session_id or await session_service.create_session(
+        app_name="agentic_rag", user_id="user"
+    )
+
+    final_answer = ""
+    async for event in runner.run_async(
+        user_id="user",
+        session_id=session_id,
+        new_message=genai_types.Content(
+            role="user", parts=[genai_types.Part.from_text(text=request.query)]
+        ),
+    ):
+        if event.is_final_response():
+            final_answer = event.content.parts[0].text
+
+    return ChatResponse(answer=final_answer, sources=[])
 
 
 @app.get("/search", response_model=List[Source])
