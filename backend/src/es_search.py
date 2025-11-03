@@ -165,7 +165,7 @@ class ElasticsearchClient:
 
     async def search(
         self, index_name: str, query: str, fields: List[str], size: int = 5
-    ) -> List[Dict[str, Any]]:
+    ) -> SearchResponse:
         """
         指定されたインデックスとフィールドに対して全文検索を実行します。
         """
@@ -175,20 +175,16 @@ class ElasticsearchClient:
                 query={"multi_match": {"query": query, "fields": fields}},
                 size=size,
             )
-            hits = []
-            for hit in response["hits"]["hits"]:
-                hits.append(
-                    {"id": hit["_id"], "score": hit["_score"], "source": hit["_source"]}
-                )
+            search_response = format_search_results(response)
             logger.info(
-                f"Search for '{query}' in '{index_name}' returned {len(hits)} hits."
+                f"Search for '{query}' in '{index_name}' returned {len(search_response.results)} hits."
             )
-            return hits
+            return search_response
         except Exception as e:
             logger.error(
                 f"Error during search in '{index_name}' for query '{query}': {e}"
             )
-            return []
+            return SearchResponse(results=[])
 
     async def hybrid_search(
         self, query: str, size: int = 5, index_name: str = INDEX_NAME
@@ -223,23 +219,12 @@ class ElasticsearchClient:
             response = await self.client.search(index=index_name, body=search_query)
 
             # 4. 結果の整形
-            results = []
-            for hit in response["hits"]["hits"]:
-                source_data = hit["_source"]
-                source = Source(
-                    filepath=source_data["filepath"],
-                    filename=source_data["filename"],
-                    content=source_data["content"],
-                    full_text=source_data["full_text"],
-                    chunk_id=source_data["chunk_id"],
-                    score=hit["_score"],
-                )
-                results.append(source)
+            search_response = format_search_results(response)
 
             logger.info(
-                f"Hybrid search for '{query}' in '{index_name}' returned {len(results)} hits."
+                f"Hybrid search for '{query}' in '{index_name}' returned {len(search_response.results)} hits."
             )
-            return SearchResponse(results=results)
+            return search_response
         except Exception as e:
             logger.error(
                 f"Error during hybrid search in '{index_name}' for query '{query}': {e}"
@@ -289,6 +274,22 @@ def embed(sentences: str | list[str]) -> list[list[float]]:
         sentences, convert_to_tensor=False, normalize_embeddings=True
     )
     return [e.tolist() for e in embeddings]
+
+
+def format_search_results(response: Dict[str, Any]) -> SearchResponse:
+    results = []
+    for hit in response["hits"]["hits"]:
+        source_data = hit["_source"]
+        source = Source(
+            filepath=source_data["filepath"],
+            filename=source_data["filename"],
+            content=source_data["content"],
+            full_text=source_data["full_text"],
+            chunk_id=source_data["chunk_id"],
+            score=hit["_score"],
+        )
+        results.append(source)
+    return SearchResponse(results=results)
 
 
 async def _debug_1():
