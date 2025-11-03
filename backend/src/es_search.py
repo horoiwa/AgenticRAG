@@ -144,11 +144,7 @@ class ElasticsearchClient:
                 docs.append(doc)
 
             # 1. filepath==str(file_path)の既存レコードをすべて削除
-            await self.client.delete_by_query(
-                index=index_name,
-                body={"query": {"term": {"filepath": str(file_path)}}},
-                refresh=True,
-            )
+            await self.delete_document(file_path=file_path, index_name=index_name)
 
             # 2. docsをindexに登録
             operations = []
@@ -166,6 +162,15 @@ class ElasticsearchClient:
             logger.error(f"Failed to index document {file_path}: {e}")
             logger.error(traceback.format_exc())
             return False
+
+    async def delete_document(
+        self, file_path: Path, index_name: str = DEFAULT_INDEX_NAME
+    ):
+        await self.client.delete_by_query(
+            index=index_name,
+            body={"query": {"term": {"filepath": str(file_path)}}},
+            refresh=True,
+        )
 
     async def search(
         self, index_name: str, query: str, fields: List[str], size: int = 5

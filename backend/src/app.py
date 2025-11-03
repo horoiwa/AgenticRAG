@@ -112,14 +112,16 @@ async def list_documents(index_name: str = settings.DEFAULT_INDEX_NAME):
 
 @app.delete("/documents/{document_id}")
 async def delete_document(
-    document_id: str, index_name: str = settings.DEFAULT_INDEX_NAME
+    document_path: Path, index_name: str = settings.DEFAULT_INDEX_NAME
 ):
     """
     Deletes a document from Elasticsearch based on its file_id.
     """
     async with get_es_client() as es_client:
         try:
-            await es_client.delete_document(file_id=document_id, index_name=index_name)
+            await es_client.delete_document(
+                file_path=document_path, index_name=index_name
+            )
             return {"message": "Document deleted successfully"}
         except Exception as e:
             logger.error(f"Error deleting document: {e}")
