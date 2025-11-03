@@ -12,7 +12,6 @@ from src.schemas import (
     ChatResponse,
     Source,
 )
-from src.agent import AdvancedRAGAgent
 
 # ロガーの設定
 logging.basicConfig(level=logging.INFO)
@@ -53,19 +52,14 @@ app = FastAPI(
     lifespan=lifespan_event_handler,
 )
 
-# Initialize the AdvancedRAGAgent
-rag_agent = AdvancedRAGAgent()
-
 
 # --- エンドポイントの定義 ---
-
-
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """
     Receives a query, performs RAG, and returns an answer with sources.
     """
-    return await rag_agent.chat(request)
+    raise NotImplementedError()
 
 
 @app.get("/search", response_model=List[Source])

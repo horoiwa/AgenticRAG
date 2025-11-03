@@ -99,10 +99,7 @@ RAGの知識源となるドキュメントを管理します。
 
 ## AgenticRAG戦略
 
-Google Agent Development Kit (`adk`) を利用してAgentワークフローを実装します。
-
-ADKを使ったAgent実装のサンプルコードは以下のURLを参照してください。
-https://github.com/google/adk-samples/tree/main/python/agents/RAG
+Google Agent Development Kit (`adk`) を利用してAgentワークフローを実装します。このワークフローを管理するメインエージェントは`AdvancedRAGAgent`として実装します。
 
 
 ### **ステップ 1: クエリ拡張**
