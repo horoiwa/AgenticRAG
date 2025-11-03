@@ -113,7 +113,7 @@ class ElasticsearchClient:
         """
         try:
             logger.info(f"Starting to index document: {file_path}")
-
+            file_path = file_path.resolve() if file_path.is_absolute() else file_path
             markdown_text = utils.to_markdown(file_path)
             chunks: list[str] = [
                 markdown_text[i : i + CHUNK_SIZE]
@@ -233,7 +233,7 @@ class ElasticsearchClient:
                 )
             )
 
-            # --- 3. クライアント側で RRF による融合 ---
+            # --- 3. 自力RRF ---
             bm25_hits = (await bm25_response)["hits"]["hits"]
             knn_hits = (await knn_response)["hits"]["hits"]
             fused_scores = collections.defaultdict(lambda: 0.0)
@@ -267,18 +267,32 @@ class ElasticsearchClient:
             logger.error(traceback.format_exc())
             return SearchResponse(results=[])
 
-    async def get_document(self, index_name: str, id: str) -> Optional[Dict[str, Any]]:
-        """ドキュメントIDでドキュメントを取得します。"""
+    async def get_document_list(self, index_name: str = INDEX_NAME) -> list[Path]:
+        """ユニークなファイルパスのリストを取得します。"""
         try:
-            response = await self.client.get(index=index_name, id=id)
-            logger.info(f"Document '{id}' retrieved from '{index_name}'.")
-            return response["_source"]
-        except NotFoundError:
-            logger.warning(f"Document '{id}' not found in '{index_name}'.")
-            return None
+            query = {
+                "size": 0,
+                "aggs": {
+                    "unique_filepaths": {
+                        "terms": {
+                            "field": "filepath",
+                            "size": 10000,  # Get up to 10,000 unique file paths
+                        }
+                    }
+                },
+            }
+            response = await self.client.search(index=index_name, body=query)
+            filepaths = [
+                Path(bucket["key"])
+                for bucket in response["aggregations"]["unique_filepaths"]["buckets"]
+            ]
+            logger.info(
+                f"Found {len(filepaths)} unique documents in index '{index_name}'."
+            )
+            return filepaths
         except Exception as e:
-            logger.error(f"Error getting document '{id}' from '{index_name}': {e}")
-            return None
+            logger.error(f"Error getting document list from index '{index_name}': {e}")
+            return []
 
 
 @asynccontextmanager
