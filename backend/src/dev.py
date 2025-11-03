@@ -117,13 +117,19 @@ async def call_agent_async(query: str, runner, user_id, session_id):
 
 
 async def debug_1():
-    APP_NAME = "SampleAgentApp"
+    # このトリプレットでスレッドを管理する
     USER_ID = "User1"
+    APP_NAME = "SampleAgentApp"
     SESSION_ID = str(uuid.uuid4())
+
+    initial_state = {"user_preference_temperature_unit": "Celsius"}
 
     session_service = InMemorySessionService()
     session = await session_service.create_session(
-        app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID
+        app_name=APP_NAME,
+        user_id=USER_ID,
+        session_id=SESSION_ID,
+        state=initial_state,
     )
 
     runner = Runner(
@@ -137,6 +143,12 @@ async def debug_1():
     ]
     for query in queries:
         await call_agent_async(query, runner, USER_ID, SESSION_ID)
+
+    if False:
+        ret = await session_service.get_session(
+            app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID
+        )
+        import pdb; pdb.set_trace()  # fmt: skip
 
 
 if __name__ == "__main__":

@@ -1,9 +1,10 @@
-# This file has been modified by the Gemini CLI.
+import copy
 
 from google.adk.agents import LlmAgent, SequentialAgent, ParallelAgent, BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
 from typing import AsyncGenerator
+
 
 from src.es_search import get_es_client
 from src.schemas import Source
@@ -17,6 +18,9 @@ query_rewriter_agent = LlmAgent(
     instruction="""ユーザーの質問と会話履歴を考慮して、Elasticsearchでの検索に最適な検索クエリを生成してください。
     生成するクエリは、具体的で、検索に適したキーワードを複数含むようにしてください。
     応答は検索クエリの文字列だけにしてください。
+
+    会話履歴：
+    {history}
     """,
     output_key="search_query",
 )
@@ -28,13 +32,12 @@ class SearchAgent(BaseAgent):
         self, ctx: InvocationContext
     ) -> AsyncGenerator[Event, None]:
         query = ctx.session.state.get("search_query")
-        import pdb; pdb.set_trace()  # fmt: skip
         if not query:
             yield Event(author=self.name, content="検索クエリが見つかりませんでした。")
             return
 
         async with get_es_client() as es_client:
-            search_results = await es_client.hybrid_search(query=query)
+            search_results: list[Source] = await es_client.hybrid_search(query=query)
 
         ctx.session.state["search_results"] = search_results
         yield Event(
@@ -49,9 +52,10 @@ search_agent = SearchAgent(name="search_agent")
 answer_agent = LlmAgent(
     name="answer_agent",
     model=settings.LLM,
-    instruction="""ユーザーの質問と会話履歴、そして以下の検索結果を考慮して、回答を生成してください。
+    instruction="""ユーザーの質問と会話履歴を考慮して、参考資料に基づく回答を生成してください。
 
-    検索結果:
+    参考資料:
+    [{doc_id}]{filename}
     {search_result}
     """,
     output_key="current_answer",
@@ -65,12 +69,16 @@ class AnswerLoopAgent(BaseAgent):
         search_results = ctx.session.state.get("search_results", [])
         answer_proposals = []
 
-        for result in search_results:
-            ctx.session.state["search_result"] = result.content
-            async for event in answer_agent.run_async(ctx):
+        for i, result in enumerate(search_results, start=1):
+            _ctx = copy.deepcopy(ctx)
+            _ctx.session.state["doc_id"] = i
+            _ctx.session.state["filename"] = result.filename
+            _ctx.session.state["search_result"] = result.content
+            async for event in answer_agent.run_async(_ctx):
                 if event.is_final_response():
-                    answer_proposals.append(ctx.session.state.get("current_answer"))
+                    answer_proposals.append(_ctx.session.state.get("current_answer"))
 
+        import pdb; pdb.set_trace()  # fmt: skip
         ctx.session.state["answer_proposals"] = answer_proposals
         yield Event(
             author=self.name,
@@ -177,7 +185,7 @@ async def call_agent_async(query: str, runner, user_id, session_id):
                     f"Agent escalated: {event.error_message or 'No specific message.'}"
                 )
             # Add more checks here if needed (e.g., specific error codes)
-            break  # Stop processing events once the final response is found
+            # break  # Stop processing events once the final response is found
 
     print(f"<<< Agent Response: {final_response_text}")
 
@@ -188,8 +196,18 @@ async def debug_1():
     SESSION_ID = "session_id_1"
 
     session_service = InMemorySessionService()
+    history = [
+        {"role": "user", "content": "軍事情報が気になります"},
+        {
+            "role": "assistant",
+            "content": "承知しました、どの国について調べましょうか？",
+        },
+    ]
     session = await session_service.create_session(
-        app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID
+        app_name=APP_NAME,
+        user_id=USER_ID,
+        session_id=SESSION_ID,
+        state={"history": history},
     )
 
     runner = Runner(
