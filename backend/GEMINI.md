@@ -101,6 +101,10 @@ RAGの知識源となるドキュメントを管理します。
 
 Google Agent Development Kit (`adk`) を利用してAgentワークフローを実装します。
 
+ADKを使ったAgent実装のサンプルコードは以下のURLを参照してください。
+https://github.com/google/adk-samples/tree/main/python/agents/RAG
+
+
 ### **ステップ 1: クエリ拡張**
 ユーザーの「元の質問」「これまでの会話履歴」を `query_rewriter_agent` に渡し、「検索クエリ」を生成します。
 
