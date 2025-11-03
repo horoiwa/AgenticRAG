@@ -135,6 +135,9 @@ state["res1"] = "検索結果1"
 受け渡しは以下で
 https://google.github.io/adk-docs/agents/custom-agents/#implementing-custom-logic
 
+参考文献を受け取りたい
+...
+
 ## 開発環境セットアップ
 
 ### Elasticsearchの起動

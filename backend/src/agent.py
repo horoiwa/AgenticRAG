@@ -41,7 +41,7 @@ class SearchAgent(BaseAgent):
 
         for i, search_result in enumerate(search_results, start=1):
             ctx.session.state[f"filename_{i}"] = search_result.filename
-            ctx.session.state[f"content_{i}"] = search_result.content
+            ctx.session.state[f"content_{i}"] = search_result.full_text
 
         yield Event(
             author=self.name,
@@ -150,6 +150,10 @@ async def debug_1():
     )
     query = "ロシアの状況はどのようになっている？"
     await call_agent_async(query, runner, USER_ID, SESSION_ID)
+
+    ret = await session_service.get_session(
+        app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID
+    )
 
 
 if __name__ == "__main__":
