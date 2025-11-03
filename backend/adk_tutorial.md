@@ -166,37 +166,77 @@ LLMの生成が完了するのを待つのではなく、生成されたトー�
         return StreamingResponse(stream_generator(response_stream), media_type="text/plain")
     ```
 
-### 5.3. 会話履歴の管理
-セッションベースで会話履歴を管理する簡単な例です。本番環境では、Redisやデータベースなど、より永続的なストレージを検討してください。
+### 5.3. 会話履歴の管理（応用）
+
+ADKはデフォルトで会話の文脈を自動でLLMに渡しますが、会話が長くなるとトークン量の増大と思考精度の低下を招く可能性があります。そのため、開発者が会話履歴を明示的に管理し、LLMに渡す情報を最適化することが推奨されます。これにより、トークン量を節約し、エージェントの応答精度を向上させることができます。
+
+#### パターンA: クエリ書き換え (Query Rewriting)
+
+長い会話履歴全体をLLMに渡す代わりに、会話の文脈を理解する専門のエージェント（`QueryRewriterAgent`）を用意するパターンです。このエージェントは、過去のやり取りとユーザーの最新の質問を基に、次のアクション（検索など）に最も適した、簡潔なクエリを新たに生成します。
 
 ```python
-# src/app.py
-from collections import defaultdict
+# src/agent.py (QueryRewriterAgentの例)
 
-# セッションごとの会話履歴を保持するシンプルなインメモリ辞書
-chat_sessions = defaultdict(list)
+query_rewriter_prompt = """
+ユーザーの質問とこれまでの会話履歴を考慮して、情報検索に最適な検索クエリを一つ生成してください。
 
-@app.post("/chat")
-async def chat(request: ChatRequest):
-    session_id = request.session_id or "default_session"
+--- 例 ---
+会話履歴: 「ADKについて教えて」\nAI: 「ADKはGoogleが開発したエージェント開発キットです。」
+ユーザーの質問: 「RAGとの関連は？」
 
-    # 過去の履歴を取得
-    history = chat_sessions[session_id]
-    chat_history_str = "\n".join(f"User: {h['q']}\nAI: {h['a']}" for h in history)
+検索クエリ: 「ADK RAG エージェント 連携」
+--- 本番 ---
+会話履歴: {chat_history}
+ユーザーの質問: {query}
 
-    workflow_input = {
-        "query": request.query,
-        "chat_history": chat_history_str,
-    }
+検索クエリ:"""
 
-    result = rag_workflow.execute(workflow_input)
-    final_answer = result.get("final_answer")
+query_rewriter_agent = Agent(
+    name="QueryRewriterAgent",
+    model="gemini-1.5-flash",
+    instruction=query_rewriter_prompt,
+    output_key="rewritten_query" # 生成したクエリをstateに保存
+)
 
-    # 今回のやり取りを履歴に追加
-    history.append({"q": request.query, "a": final_answer})
-
-    return {"answer": final_answer, "session_id": session_id}
+# ワークフローの最初のステップとしてこのエージェントを組み込む
+# rag_workflow = SequentialAgent(sub_agents=[query_rewriter_agent, ...])
 ```
+
+#### パターンB: 手動での履歴整形と注入
+
+アプリケーション側（例: FastAPIサーバー）で、会話履歴を特定のフォーマットの文字列に整形し、ワークフローの初期入力として`session.state`に注入する方法です。プロンプト内で履歴をどのように見せるかを完全に制御できます。
+
+```python
+# src/app.py (FastAPIなどのアプリケーション層での処理)
+
+# (セッションIDに基づいて永続化層から履歴を取得するロジック)
+history = get_history_for_session(session_id)
+
+# 履歴を特定のフォーマットの文字列に整形
+# 例: 直近3回のやり取りのみを対象にする
+chat_history_str = "\n".join(
+    f"User: {h['q']}\nAI: {h['a']}" for h in history[-3:]
+)
+
+# ワークフローの入力として、整形した履歴を渡す
+workflow_input = {
+    "query": "ユーザーの現在の質問",
+    "chat_history": chat_history_str, # stateに格納される
+}
+
+# ワークフローを実行
+result = rag_workflow.execute(workflow_input)
+
+# ...
+
+# エージェントのプロンプト側では {chat_history} で履歴を受け取る
+# instruction="... 過去の会話: {chat_history} ..."
+```
+
+#### 永続化について
+
+これらのパターンを本番環境で運用するには、会話履歴の永続化が不可欠です。開発初期段階ではインメモリの辞書で問題ありませんが、ユーザーがセッションをまたいで会話を継続できるようにするためには、`Session`オブジェクト（会話履歴を含む）をデータベースに保存する必要があります。ADKは、本番環境向けに`VertexAiSessionService`や`DatabaseSessionService`といった永続化のための仕組みを提供しています。
+
 
 ## 6. デバッグとロギング
 ワークフローの各ステップの動作を理解するために、ADKはロギング機能を提供しています。
