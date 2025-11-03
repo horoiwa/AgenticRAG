@@ -1,8 +1,9 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from typing import List
 from contextlib import asynccontextmanager
 from pathlib import Path
 import logging
+import tempfile
 
 from src.es_search import get_es_client
 from src import settings
@@ -73,6 +74,32 @@ async def search(query: str, index_name: str = settings.DEFAULT_INDEX_NAME):
     return results
 
 
+@app.post("/documents")
+async def upload_document(
+    file: UploadFile = File(...), index_name: str = settings.DEFAULT_INDEX_NAME
+):
+    """
+    Uploads a new document, vectorizes it, and stores it in Elasticsearch.
+    """
+    try:
+        # 一時ファイルに保存
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file.filename) as tmp:
+            tmp.write(await file.read())
+            tmp_path = Path(tmp.name)
+
+        async with get_es_client() as es_client:
+            await es_client.index_document(file_path=tmp_path, index_name=index_name)
+
+        return {"message": "Document indexed successfully"}
+    except Exception as e:
+        logger.error(f"Error indexing document: {e}")
+        raise HTTPException(status_code=500, detail=f"Error indexing document: {e}")
+    finally:
+        # 一時ファイルを削除
+        if "tmp_path" in locals() and tmp_path.exists():
+            tmp_path.unlink()
+
+
 @app.get("/documents", response_model=List[Path])
 async def list_documents(index_name: str = settings.DEFAULT_INDEX_NAME):
     """
@@ -81,3 +108,19 @@ async def list_documents(index_name: str = settings.DEFAULT_INDEX_NAME):
     async with get_es_client() as es_client:
         documents = await es_client.get_document_list(index_name=index_name)
     return documents
+
+
+@app.delete("/documents/{document_id}")
+async def delete_document(
+    document_id: str, index_name: str = settings.DEFAULT_INDEX_NAME
+):
+    """
+    Deletes a document from Elasticsearch based on its file_id.
+    """
+    async with get_es_client() as es_client:
+        try:
+            await es_client.delete_document(file_id=document_id, index_name=index_name)
+            return {"message": "Document deleted successfully"}
+        except Exception as e:
+            logger.error(f"Error deleting document: {e}")
+            raise HTTPException(status_code=500, detail=f"Error deleting document: {e}")

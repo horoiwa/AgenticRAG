@@ -63,3 +63,60 @@ def test_search_endpoint(client: TestClient, monkeypatch):
         assert "chunk_id" in item
         # Check if the filename matches the indexed document
         assert item["filename"] == "1-1-1.pdf"
+
+
+def test_documents_endpoint(client: TestClient):
+    """
+    Tests the /documents endpoint.
+    """
+    # Test file path
+    pdf_path = Path(__file__).resolve().parent / "test_data" / "1-2-1.pdf"
+
+    # 1. POST /documents (Upload)
+    with open(pdf_path, "rb") as f:
+        response = client.post(
+            "/documents",
+            files={"file": (pdf_path.name, f, "application/pdf")},
+            params={"index_name": TEST_INDEX_NAME},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["message"] == "Document indexed successfully"
+
+    # Allow time for Elasticsearch to index the document
+    async def wait_for_indexing():
+        await asyncio.sleep(1)
+
+    asyncio.run(wait_for_indexing())
+
+    # 2. GET /documents (List)
+    response = client.get("/documents", params={"index_name": TEST_INDEX_NAME})
+    assert response.status_code == 200
+    documents = response.json()
+    assert isinstance(documents, list)
+    assert any(doc["filename"] == pdf_path.name for doc in documents)
+
+    # 3. DELETE /documents/{document_id}
+    # Find the document_id (file_id) from the GET /documents response
+    document_to_delete = next(
+        (doc for doc in documents if doc["filename"] == pdf_path.name), None
+    )
+    assert document_to_delete is not None
+    document_id = document_to_delete["file_id"]
+
+    response = client.delete(
+        f"/documents/{document_id}", params={"index_name": TEST_INDEX_NAME}
+    )
+    assert response.status_code == 200
+    assert response.json()["message"] == "Document deleted successfully"
+
+    # Allow time for Elasticsearch to delete the document
+    asyncio.run(wait_for_indexing())
+
+    # 4. GET /documents (Verify deletion)
+    response = client.get("/documents", params={"index_name": TEST_INDEX_NAME})
+    assert response.status_code == 200
+    documents_after_delete = response.json()
+    assert not any(
+        doc["filename"] == pdf_path.name for doc in documents_after_delete
+    )
